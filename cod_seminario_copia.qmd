@@ -272,6 +272,7 @@ O experimento cria clusters **2D não-lineares** (Moons e Circles), embute-os em
 library(kernlab)   # Kernel PCA
 library(umap)      # UMAP
 library(mclust)    # GMM + adjustedRandIndex()
+library(dbscan)    # DBSCAN e kNNdist
 
 SEED <- 42
 
@@ -342,12 +343,84 @@ reduzir <- function(Xhd, metodo = "pca", n_comp = 2) {
 }
 
 clusterizar <- function(X, k = 2, algoritmo = "kmeans") {
-  set.seed(SEED)
-  if (algoritmo == "kmeans")
-    kmeans(X, centers = k, nstart = 30)$cluster - 1L
-  else
-    Mclust(X, G = k, verbose = FALSE)$classification - 1L
+  set.seed(42) # Mantendo a seed de controle do experimento
+  
+  if (algoritmo == "kmeans") {
+    
+    return(kmeans(X, centers = k, nstart = 30)$cluster)
+    
+  } else if (algoritmo == "gmm") {
+    
+    return(Mclust(X, G = k, verbose = FALSE)$classification)
+    
+  } else if (algoritmo == "ahc") {
+    
+    # AHC utilizando critério de Ward e distância euclidiana
+    matriz_dist <- dist(X, method = "euclidean")
+    hc <- hclust(matriz_dist, method = "ward.D2")
+    return(cutree(hc, k = k))
+    
+  } else if (algoritmo == "dbscan") {
+    
+    # Heurística dinâmica para o eps baseada no 5-NN distance
+    knn_dists <- kNNdist(X, k = 5)
+    eps_dinamico <- quantile(knn_dists, 0.50)
+    db <- dbscan(X, eps = eps_dinamico, minPts = 5)
+    
+    # Nota: DBSCAN atribui o cluster '0' para pontos considerados ruído (outliers).
+    return(db$cluster)
+  }
 }
+```
+
+```{r}
+# 2. Configurações da malha de testes
+datasets_nomes <- c("moons", "circles")
+dr_metodos     <- c("sem_reducao", "pca", "kpca", "umap")
+algoritmos     <- c("kmeans", "gmm", "ahc", "dbscan")
+
+# Data frame para armazenar os resultados
+resultados_experimento <- data.frame()
+
+# 3. Execução do experimento
+for (ds_nome in datasets_nomes) {
+  # Gera os dados sintéticos em 50 dimensões com ruído
+  dados  <- gerar_dados(n = 600, d = 50, dataset = ds_nome)
+  Xhd    <- dados$Xhd
+  y_true <- dados$y
+  
+  for (dr in dr_metodos) {
+    # Aplica o método de redução de dimensionalidade
+    if (dr == "sem_reducao") {
+      X_red <- Xhd
+    } else {
+      X_red <- reduzir(Xhd, metodo = dr, n_comp = 2)
+    }
+    
+    # Clusteriza e avalia usando todos os algoritmos
+    for (algo in algoritmos) {
+      y_pred <- clusterizar(X_red, k = 2, algoritmo = algo)
+      
+      # Calcula o Adjusted Rand Index (ARI)
+      ari <- adjustedRandIndex(y_true, y_pred)
+      
+      # Salva na tabela
+      resultados_experimento <- rbind(resultados_experimento, data.frame(
+        Dataset   = ds_nome,
+        Reducao   = dr,
+        Algoritmo = algo,
+        ARI       = round(ari, 4)
+      ))
+    }
+  }
+}
+
+# 4. Visualizando a tabela de resultados de forma pivotada
+library(tidyr)
+tabela_ari <- pivot_wider(resultados_experimento, 
+                          names_from = Algoritmo, 
+                          values_from = ARI)
+print(tabela_ari)
 ```
 
 ## Resultados — Moons (50 dimensões)
