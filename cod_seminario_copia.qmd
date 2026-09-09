@@ -36,10 +36,10 @@ Em espaços de alta dimensão, a geometria quebra de formas contraintuitivas. A 
 
 **O problema em espaços de alta dimensão:**
 
-- Distâncias euclidianas entre pares de pontos convergem para o mesmo valor
-- K-Means, AHC e GMM dependem de distância -\> estrutura de clusters desaparece
-- A separação entre clusters fica indistinguível do ruído
-- Redução não é pré-processamento opcional, é o que restaura o sinal
+-   Distâncias euclidianas entre pares de pontos convergem para o mesmo valor
+-   K-Means, AHC e GMM dependem de distância -\> estrutura de clusters desaparece
+-   A separação entre clusters fica indistinguível do ruído
+-   Redução não é pré-processamento opcional, é o que restaura o sinal
 
 ## Concentração de Distâncias
 
@@ -91,7 +91,7 @@ Seja $D_{\max}(q)$ e $D_{\min}(q)$ as distâncias máxima e mínima de uma consu
 
 $$\lim_{d \to \infty} \Pr\!\left[\frac{D_{\max}(q) - D_{\min}(q)}{D_{\min}(q)} < \varepsilon\right] = 1, \quad \forall\,\varepsilon > 0$$
 
-**Consequência direta:** o vizinho mais próximo torna-se tão distante quanto qualquer outro ponto — algoritmos como KNN, K-Means e DBSCAN perdem completamente a capacidade discriminativa.
+**Consequência direta:** o vizinho mais próximo torna-se tão distante quanto qualquer outro ponto — algoritmos como KNN, K-Means e DBSCAN perdem a capacidade discriminativa.
 
 ```{r}
 # Razão (D_max - D_min) / D_min decresce com a dimensão
@@ -164,22 +164,19 @@ A mesma separação que é *óbvia* em 2D torna-se *invisível* em 50D. A reduç
 
 ------------------------------------------------------------------------
 
-# O Estudo: Amate et al. (2026)
+# Replica do estudo de Amate et al. (2026)
 
 ## Escopo e Desenho Experimental
 
 ::::: columns
 ::: {.column width="50%"}
-**Métodos de Redução Avaliados no Artigo**
+**Métodos de Redução Avaliados**
 
-| Família       | Método           |
-|---------------|------------------|
-| Linear        | PCA              |
-| Kernel        | Kernel PCA (RBF) |
-| Manifold      | Isomap, MDS      |
-| Deep Learning | VAE              |
-
-*t-SNE e UMAP foram excluídos por serem estocásticos e sensíveis a hiperparâmetros — tornam a comparação controlada mais difícil.*
+| Família  | Método            |
+|----------|-------------------|
+| Linear   | PCA               |
+| Kernel   | Kernel PCA (RBF)  |
+| Manifold | Isomap, MDS, UMAP |
 :::
 
 ::: {.column width="50%"}
@@ -194,8 +191,8 @@ A mesma separação que é *óbvia* em 2D torna-se *invisível* em 50D. A reduç
 
 **Datasets**
 
-- 1 165 datasets sintéticos gerados com *repliclust*
-- 20 datasets reais do repositório UCI
+-   datasets sintéticos gerados via código
+-   20 datasets reais do repositório UCI
 :::
 :::::
 
@@ -210,7 +207,7 @@ Dados brutos
     ├──────────── Sem redução ──────────────────────────────┐
     │                                                        │
     ▼                                                        │
-[DR: PCA | Kernel PCA | VAE | Isomap | MDS]               │
+[DR: PCA | Kernel PCA | Isomap | MDS | UMAP]               │
     │  Níveis: k−1  |  25% de d  |  50% de d               │
     ▼                                                        │
 [Clustering: K-Means | AHC | GMM | OPTICS] ◄───────────────┘
@@ -249,331 +246,563 @@ $$\text{RI} = \frac{a + b}{\binom{n}{2}}, \quad a = \text{pares no mesmo cluster
 ::: {.column width="50%"}
 **Vantagens do ARI:**
 
-- Ajustado para chance (sem viés com $K$ grande)
-- Labels não precisam corresponder entre partições
-- Aplicável a todos os datasets com ground truth
-- Simétrico: $\text{ARI}(U, V) = \text{ARI}(V, U)$
+-   Ajustado para chance (sem viés com $K$ grande)
+-   Labels não precisam corresponder entre partições
+-   Aplicável a todos os datasets com ground truth
+-   Simétrico: $\text{ARI}(U, V) = \text{ARI}(V, U)$
 :::
 :::::
 
-::: callout-note
-Na visualização: **borda verde** = ARI ≥ 0.80 (bom) · **laranja** = 0.45–0.80 (médio) · **vermelha** \< 0.45 (ruim)
-:::
-
 ------------------------------------------------------------------------
 
-# Demonstração Prática
+# Experimento Sistemático
 
-## Configuração
+Reprodução controlada da metodologia de Amate et al. (2026): quatro métodos de redução (PCA, Kernel PCA, Isomap, MDS) × quatro algoritmos de clusterização (K-Means, AHC, GMM, OPTICS) × três níveis de redução (k−1, 25%, 50%) sobre quatro tipos de datasets sintéticos em 50 dimensões.
 
-O experimento cria clusters **2D não-lineares** (Moons e Circles), embute-os em **50 dimensões** via projeção aleatória com ruído, e compara o ARI do K-Means em quatro condições: sem redução, PCA, Kernel PCA e UMAP.
+## Configuração do Experimento
 
 ```{r}
+#| label: setup-experimento
+
 library(kernlab)   # Kernel PCA
+library(mclust)    # GMM + adjustedRandIndex
+library(dbscan)    # OPTICS
+library(vegan)     # Isomap
+library(MASS)      # mvrnorm, cmdscale
 library(umap)      # UMAP
-library(mclust)    # GMM + adjustedRandIndex()
-library(dbscan)    # DBSCAN e kNNdist
+library(ggplot2)
+library(patchwork) # composição de painéis
+library(dplyr)
+library(tidyr)
+library(knitr)
 
 SEED <- 42
+```
 
-make_moons <- function(n = 600, noise = 0.08) {
+## Geração dos Datasets
+
+Quatro tipos de dados sintéticos embebidos em 50 dimensões via projeção gaussiana aleatória, replicando as famílias do artigo:
+
+```{r}
+#| label: geracao-dados
+
+make_moons_hd <- function(n = 400, d = 50, noise = 0.08, seed = SEED) {
+  set.seed(seed)
   n2    <- n %/% 2
   theta <- seq(0, pi, length.out = n2)
-  X <- rbind(
-    cbind(cos(theta),       sin(theta)),
-    cbind(1 - cos(theta),   1 - sin(theta) - 0.5)
-  )
-  X + matrix(rnorm(n * 2, sd = noise), n, 2)
-}
-
-make_circles <- function(n = 600, noise = 0.05, factor = 0.45) {
-  n2    <- n %/% 2
-  theta <- runif(n, 0, 2 * pi)
-  r     <- c(rep(1, n2), rep(factor, n - n2))
-  cbind(r * cos(theta), r * sin(theta)) +
-    matrix(rnorm(n * 2, sd = noise), n, 2)
-}
-
-gerar_dados <- function(n = 600, d = 50, dataset = "moons") {
-  set.seed(SEED)
-  X2d <- if (dataset == "moons") make_moons(n) else make_circles(n)
-  X2d <- scale(X2d)
-  y   <- c(rep(0L, n %/% 2), rep(1L, n - n %/% 2))
-  # Johnson-Lindenstrauss: 2D → d dimensões com ruído
+  X2d <- rbind(cbind(cos(theta), sin(theta)),
+               cbind(1 - cos(theta), 1 - sin(theta) - 0.5))
+  X2d <- scale(X2d + matrix(rnorm(n * 2, sd = noise), n, 2))
   P   <- matrix(rnorm(2 * d), 2, d) / sqrt(2)
   Xhd <- X2d %*% P + matrix(rnorm(n * d, sd = 0.35), n, d)
-  list(X2d = X2d, Xhd = scale(Xhd), y = y)
+  list(X = scale(Xhd), y = rep(1:2, c(n2, n - n2)), k = 2, nome = "Moons")
 }
+
+make_circles_hd <- function(n = 400, d = 50, noise = 0.05, seed = SEED) {
+  set.seed(seed)
+  theta <- runif(n, 0, 2 * pi)
+  r     <- c(rep(1, n %/% 2), rep(0.45, n - n %/% 2))
+  X2d   <- scale(cbind(r * cos(theta), r * sin(theta)) +
+                 matrix(rnorm(n * 2, sd = noise), n, 2))
+  P     <- matrix(rnorm(2 * d), 2, d) / sqrt(2)
+  Xhd   <- X2d %*% P + matrix(rnorm(n * d, sd = 0.35), n, d)
+  list(X = scale(Xhd), y = rep(1:2, c(n %/% 2, n - n %/% 2)), k = 2, nome = "Circles")
+}
+
+# Gaussiano estruturado (simplificação do RSG de Rodriguez et al., 2021)
+make_gaussiano_hd <- function(k = 3, d = 50, nc = 80, sep = 3, seed = SEED) {
+  set.seed(seed)
+  centros <- matrix(rnorm(k * d, sd = sep), k, d)
+  X <- do.call(rbind, lapply(seq_len(k), function(i) {
+    mvrnorm(nc, centros[i, ], diag(d))
+  }))
+  y <- rep(seq_len(k), each = nc)
+  list(X = scale(X), y = y, k = k,
+       nome = paste0("Gaussiano-", k, "k"))
+}
+
+datasets <- list(
+  moons   = make_moons_hd(n = 400, d = 50),
+  circles = make_circles_hd(n = 400, d = 50),
+  gauss3  = make_gaussiano_hd(k = 3, d = 50, nc = 80),
+  gauss5  = make_gaussiano_hd(k = 5, d = 50, nc = 60)
+)
 ```
 
-::: callout-tip
-## Johnson-Lindenstrauss
+## Funções de Redução e Clusterização
 
-A projeção `Xhd = X2d %*% P` preserva aproximadamente as distâncias entre pontos (lema JL). O sinal 2D está presente em 50D, mas diluído em 48 dimensões de ruído gaussiano.
-:::
-
-## As Três Reduções
+Pipeline: normalização z-score (já aplicada), redução, clusterização, ARI.
 
 ```{r}
-reduzir <- function(Xhd, metodo = "pca", n_comp = 2) {
+#| label: funcoes-dr-cluster
+
+# Calcula número de componentes conforme o nível de redução
+n_comp_nivel <- function(d, k, nivel) {
+  switch(nivel,
+    "k-1" = max(k - 1, 2),
+    "25%" = max(round(d * 0.25), 2),
+    "50%" = max(round(d * 0.50), 2)
+  )
+}
+
+# Aplica o método de redução de dimensionalidade
+reduzir <- function(X, metodo, n_comp) {
   switch(metodo,
-
     pca = {
-      # Linear: projeta nas direções de máxima variância
-      prcomp(Xhd, center = FALSE)$x[, seq_len(n_comp)]
+      prcomp(X, center = FALSE)$x[, seq_len(n_comp), drop = FALSE]
     },
-
     kpca = {
-      # Kernel trick: K_ij = exp(−σ ||xi − xj||²)
-      # Aplica PCA no espaço de features implícito do kernel RBF
-      fit <- kpca(Xhd, kernel = "rbfdot", features = n_comp)
+      fit <- kpca(X, kernel = "rbfdot", features = n_comp)
       rotated(fit)
     },
-
+    isomap = {
+      d_mat <- vegdist(X, method = "euclidean")
+      fit   <- isomap(d_mat, ndim = n_comp, k = 7)
+      fit$points
+    },
+    mds = {
+      cmdscale(dist(X), k = n_comp)
+    },
     umap = {
-      # Constrói grafo de k-vizinhos e otimiza embedding topológico
-      set.seed(SEED)
       cfg              <- umap.defaults
       cfg$n_components <- n_comp
-      cfg$n_neighbors  <- 15
+      cfg$n_neighbors  <- min(15L, nrow(X) - 1L)
       cfg$min_dist     <- 0.1
-      umap(Xhd, config = cfg)$layout
+      cfg$random_state <- SEED
+      umap(X, config = cfg)$layout
     }
   )
 }
 
-clusterizar <- function(X, k = 2, algoritmo = "kmeans") {
-  set.seed(42) # Mantendo a seed de controle do experimento
-  
-  if (algoritmo == "kmeans") {
-    
-    return(kmeans(X, centers = k, nstart = 30)$cluster)
-    
-  } else if (algoritmo == "gmm") {
-    
-    return(Mclust(X, G = k, verbose = FALSE)$classification)
-    
-  } else if (algoritmo == "ahc") {
-    
-    # AHC utilizando critério de Ward e distância euclidiana
-    matriz_dist <- dist(X, method = "euclidean")
-    hc <- hclust(matriz_dist, method = "ward.D2")
-    return(cutree(hc, k = k))
-    
-  } else if (algoritmo == "dbscan") {
-    
-    # Heurística dinâmica para o eps baseada no 5-NN distance
-    knn_dists <- kNNdist(X, k = 5)
-    eps_dinamico <- quantile(knn_dists, 0.50)
-    db <- dbscan(X, eps = eps_dinamico, minPts = 5)
-    
-    # Nota: DBSCAN atribui o cluster '0' para pontos considerados ruído (outliers).
-    return(db$cluster)
+# Aplica o algoritmo de clusterização e retorna labels
+clusterizar <- function(X, k, algoritmo, seed = SEED) {
+  set.seed(seed)
+  switch(algoritmo,
+    kmeans = kmeans(X, centers = k, nstart = 30)$cluster,
+
+    ahc = {
+      hc <- hclust(dist(X), method = "ward.D2")
+      cutree(hc, k = k)
+    },
+
+    gmm = {
+      fit <- Mclust(X, G = k, verbose = FALSE)
+      if (is.null(fit)) rep(1L, nrow(X)) else fit$classification
+    },
+
+    optics = {
+      opt <- optics(X, minPts = 5)
+      res <- extractXi(opt, xi = 0.05, minimum = TRUE)
+      cl  <- res$cluster
+      # Seleciona os k clusters com mais pontos
+      ids_validos <- cl[cl > 0]
+      if (length(unique(ids_validos)) >= k) {
+        top_k  <- as.integer(names(sort(table(ids_validos), decreasing = TRUE)[seq_len(k)]))
+        cl_out <- rep(0L, length(cl))
+        for (i in seq_len(k)) cl_out[cl == top_k[i]] <- i
+        cl_out
+      } else cl
+    }
+  )
+}
+```
+
+## Estrutura dos Datasets e Limitações do Isomap
+
+### Como os dados gaussianos são gerados
+
+Os datasets `gauss3` e `gauss5` seguem uma estrutura de **misturas gaussianas isotrópicas** em alta dimensão. Para cada cluster $i = 1, \ldots, k$, o centroide $\mu_i$ é sorteado de $\mathcal{N}(0,\, \text{sep}^2 \cdot I_d)$ e, ao redor dele, $n_c$ pontos são amostrados de $\mathcal{N}(\mu_i,\, I_d)$. A separação `sep = 3` garante que os centroides fiquem afastados em média $\approx 3\sqrt{d}$ entre si — suficiente para estrutura de clusters bem definida mesmo em $d = 50$.
+
+Diferentemente dos datasets Moons e Circles, os dados gaussianos **não têm estrutura de variedade** (*manifold*). Eles são nuvens convexas, esféricas e preenchidas. Essa distinção é decisiva para o comportamento dos métodos de redução.
+
+### Por que o Isomap não funciona bem com dados gaussianos
+
+O Isomap opera em três passos:
+
+1. Constrói um grafo k-NN sobre os pontos em espaço ambiente
+2. Calcula distâncias **geodésicas** como menor caminho no grafo
+3. Aplica MDS clássico sobre essas distâncias geodésicas
+
+A hipótese central do Isomap é que os dados vivem em uma **variedade de baixa dimensão** onde a distância ao longo da superfície (geodésica) difere significativamente da distância euclidiana no espaço ambiente — como ocorre com uma lua crescente enrolada ou um toro embebido em $\mathbb{R}^3$.
+
+::: callout-important
+## Isomap e dados gaussianos: incompatibilidade estrutural
+
+Dados gaussianos isotrópicos são sólidos convexos: o caminho mais curto entre dois pontos **dentro do blob** já é a linha reta (distância euclidiana). Não há superfície curvada a "desenrolar". O Isomap não ganha nada em relação ao MDS clássico nesses dados.
+
+Pior: em $d = 50$ dimensões, o grafo k-NN pode ter **componentes desconectados** entre clusters. Caminhos geodésicos podem cruzar clusters erroneamente via pontos intermediários, distorcendo a embedding e misturando os grupos. Quando o grafo é desconectado, `vegan::isomap()` retorna erro — tratado com `tryCatch` no código abaixo.
+:::
+
+Essa é a razão pela qual Amate et al. (2026) reporta que o Isomap tem desempenho **instável e dependente da geometria intrínseca** do dataset — excelente em variedades (Moons, Circles), porém problemático em dados gaussianos estruturados.
+
+### Projeção em 2D por método de redução
+
+A primeira linha da grade mostra os dados em sua **geometria original em 2D** — a "face verdadeira" de cada dataset antes da expansão para 50 dimensões via projeção gaussiana aleatória. As linhas seguintes aplicam cada método de redução ao espaço de 2 componentes sobre os dados já em 50D. A comparação revela o quanto cada técnica consegue *recuperar* a estrutura original.
+
+```{r}
+#| label: vis-datasets-2d
+#| fig-height: 17
+#| fig-cap: "Grade 6×4: linhas = método (2D original + 5 técnicas de DR), colunas = dataset. A linha '2D original' é a geometria nativa antes do embedding em 50D — serve de referência para avaliar quanto cada método de redução recupera a estrutura verdadeira. Pontos ausentes no Isomap indicam falha por grafo k-NN desconectado."
+
+# Gera versões 2D nativas de cada dataset (mesmos parâmetros, sem embedding HD)
+# set.seed() individual garante que Moons/Circles 2D sejam idênticos ao X2d
+# que foi embebido no HD — é exatamente a "face verdadeira" antes do embedding.
+gerar_baseline_2d <- function(seed = SEED) {
+  n <- 400; n2 <- n %/% 2
+
+  set.seed(seed)
+  theta   <- seq(0, pi, length.out = n2)
+  X_moons <- rbind(cbind(cos(theta), sin(theta)),
+                   cbind(1 - cos(theta), 1 - sin(theta) - 0.5))
+  X_moons <- scale(X_moons + matrix(rnorm(n * 2, sd = 0.08), n, 2))
+  ds_moons <- list(X = X_moons, y = rep(1:2, c(n2, n - n2)), nome = "Moons")
+
+  set.seed(seed)
+  theta_c   <- runif(n, 0, 2 * pi)
+  r         <- c(rep(1, n2), rep(0.45, n - n2))
+  X_circles <- scale(cbind(r * cos(theta_c), r * sin(theta_c)) +
+                     matrix(rnorm(n * 2, sd = 0.05), n, 2))
+  ds_circles <- list(X = X_circles, y = rep(1:2, c(n2, n - n2)), nome = "Circles")
+
+  set.seed(seed)
+  c3   <- matrix(rnorm(3 * 2, sd = 3), 3, 2)
+  X_g3 <- scale(do.call(rbind, lapply(1:3, function(i) mvrnorm(80, c3[i, ], diag(2)))))
+  ds_g3 <- list(X = X_g3, y = rep(1:3, each = 80), nome = "Gaussiano-3k")
+
+  set.seed(seed)
+  c5   <- matrix(rnorm(5 * 2, sd = 3), 5, 2)
+  X_g5 <- scale(do.call(rbind, lapply(1:5, function(i) mvrnorm(60, c5[i, ], diag(2)))))
+  ds_g5 <- list(X = X_g5, y = rep(1:5, each = 60), nome = "Gaussiano-5k")
+
+  list(moons = ds_moons, circles = ds_circles, gauss3 = ds_g3, gauss5 = ds_g5)
+}
+
+datasets_2d <- gerar_baseline_2d()
+
+df_baseline <- do.call(rbind, lapply(datasets_2d, function(ds) {
+  data.frame(Dim1 = ds$X[, 1], Dim2 = ds$X[, 2],
+             Cluster = factor(ds$y), Dataset = ds$nome,
+             Metodo = "2D original")
+}))
+
+# DR aplicado aos dados em 50D
+metodos_vis   <- c("pca", "kpca", "isomap", "mds", "umap")
+nomes_metodos <- c(pca = "PCA", kpca = "Kernel PCA",
+                   isomap = "Isomap", mds = "MDS", umap = "UMAP")
+
+df_dr <- do.call(rbind, lapply(datasets, function(ds) {
+  do.call(rbind, lapply(metodos_vis, function(met) {
+    pts <- tryCatch(
+      reduzir(ds$X, met, n_comp = 2),
+      error = function(e) matrix(NA_real_, nrow(ds$X), 2)
+    )
+    data.frame(Dim1 = pts[, 1], Dim2 = pts[, 2],
+               Cluster = factor(ds$y), Dataset = ds$nome,
+               Metodo = nomes_metodos[met])
+  }))
+}))
+
+df_vis <- rbind(df_baseline, df_dr)
+df_vis$Dataset <- factor(df_vis$Dataset,
+  levels = c("Moons", "Circles", "Gaussiano-3k", "Gaussiano-5k"))
+df_vis$Metodo <- factor(df_vis$Metodo,
+  levels = c("2D original", "PCA", "Kernel PCA", "Isomap", "MDS", "UMAP"))
+
+# facet_grid com scales="free" ainda compartilha o eixo X por coluna e o eixo Y
+# por linha — a coluna "Moons" teria um range de X ditado pelo Isomap (±30),
+# esmagando o 2D original (±3) num fio. facet_wrap com scales="free" dá escalas
+# verdadeiramente independentes por painel.
+ggplot(df_vis, aes(x = Dim1, y = Dim2, color = Cluster)) +
+  geom_point(size = 0.85, alpha = 0.65, na.rm = TRUE) +
+  facet_wrap(~ Metodo + Dataset, ncol = 4, scales = "free",
+             labeller = labeller(
+               Metodo  = label_value,
+               Dataset = label_value,
+               .multi_line = TRUE
+             )) +
+  scale_color_brewer(palette = "Set1", name = "Cluster\nverdadeiro") +
+  labs(x = "Dimensão 1", y = "Dimensão 2") +
+  theme_bw(base_size = 10) +
+  theme(
+    strip.text      = element_text(face = "bold", size = 8),
+    legend.position = "right",
+    panel.spacing   = unit(0.45, "lines"),
+    axis.text       = element_text(size = 6),
+    axis.title      = element_text(size = 9)
+  )
+```
+
+Leituras esperadas da grade:
+
+- **2D original**: Moons e Circles exibem variedades curvilíneas perfeitamente separadas; blobs gaussianos formam grupos esféricos compactos
+- **PCA / MDS**: ambos lineares, recuperam bem os blobs gaussianos mas "achata" as luas e os círculos em configurações sem separabilidade linear
+- **Kernel PCA**: o mapeamento RBF "desenrola" as variedades curvas; Moons e Circles ficam linearmente separáveis, embora a escala difira da original
+- **Isomap**: quando o grafo k-NN é conexo (Moons, Circles), preserva geodésicas e recupera a curva original com fidelidade; nos gaussianos em 50D, o grafo pode fragmentar e a embedding falha ou distorce
+- **UMAP**: comprimi a estrutura local fortemente — clusters ficam compactos e bem separados em todos os datasets, às vezes mais do que na geometria original
+
+## Execução do Grid de Experimentos
+
+```{r}
+#| label: execucao-experimento
+#| cache: true
+
+dr_metodos <- c("sem_reducao", "pca", "kpca", "isomap", "mds", "umap")
+algoritmos <- c("kmeans", "ahc", "gmm", "optics")
+niveis_dr  <- c("k-1", "25%", "50%")
+
+resultados <- data.frame()
+
+for (ds_nome in names(datasets)) {
+  ds <- datasets[[ds_nome]]
+  X  <- ds$X
+  y  <- ds$y
+  k  <- ds$k
+  d  <- ncol(X)
+
+  for (dr in dr_metodos) {
+    niveis_iter <- if (dr == "sem_reducao") list(list(nivel = NA, label = "Sem redução"))
+                   else lapply(niveis_dr, function(nv)
+                     list(nivel = nv, label = paste(toupper(dr), nv)))
+
+    for (it in niveis_iter) {
+      nivel <- it$nivel
+      label <- it$label
+
+      if (dr == "sem_reducao") {
+        X_red  <- X
+        n_comp <- d
+      } else {
+        n_comp <- n_comp_nivel(d, k, nivel)
+        X_red  <- tryCatch(reduzir(X, dr, n_comp), error = function(e) NULL)
+        if (is.null(X_red)) next
+      }
+
+      for (algo in algoritmos) {
+        y_pred <- tryCatch(clusterizar(X_red, k, algo), error = function(e) NULL)
+        if (is.null(y_pred)) next
+
+        # OPTICS marca ruído como 0 — remove do cálculo do ARI
+        validos <- y_pred != 0
+        ari <- if (sum(validos) >= 10)
+                 adjustedRandIndex(y[validos], y_pred[validos])
+               else NA_real_
+
+        resultados <- rbind(resultados, data.frame(
+          Dataset   = ds$nome,
+          DR        = dr,
+          Nivel     = ifelse(is.na(nivel), "—", nivel),
+          Label     = label,
+          Algoritmo = algo,
+          n_comp    = n_comp,
+          ARI       = ari,
+          stringsAsFactors = FALSE
+        ))
+      }
+    }
   }
+}
+
+# Ordena os rótulos do eixo x como no artigo
+ordem_labels <- c(
+  "Sem redução",
+  "PCA k-1", "PCA 25%", "PCA 50%",
+  "KPCA k-1", "KPCA 25%", "KPCA 50%",
+  "ISOMAP k-1", "ISOMAP 25%", "ISOMAP 50%",
+  "MDS k-1", "MDS 25%", "MDS 50%",
+  "UMAP k-1", "UMAP 25%", "UMAP 50%"
+)
+resultados$Label <- factor(resultados$Label, levels = ordem_labels)
+```
+
+## Resultados — Boxplots por Algoritmo {#sec-boxplots}
+
+Reprodução das Figuras 3–6 de Amate et al. (2026): distribuição do ARI para cada combinação de método de redução e nível, agrupada por algoritmo de clusterização.
+
+```{r}
+#| label: boxplot-fn
+
+cores_familia <- c(
+  "Sem redução" = "#4C72B0",
+  "PCA k-1" = "#DD8452", "PCA 25%" = "#DD8452", "PCA 50%" = "#DD8452",
+  "KPCA k-1" = "#55A868", "KPCA 25%" = "#55A868", "KPCA 50%" = "#55A868",
+  "ISOMAP k-1" = "#C44E52", "ISOMAP 25%" = "#C44E52", "ISOMAP 50%" = "#C44E52",
+  "MDS k-1" = "#8172B2", "MDS 25%" = "#8172B2", "MDS 50%" = "#8172B2",
+  "UMAP k-1" = "#CCB974", "UMAP 25%" = "#CCB974", "UMAP 50%" = "#CCB974"
+)
+
+cores_dataset <- c(
+  "Moons"         = "#E41A1C",
+  "Circles"       = "#377EB8",
+  "Gaussiano-3k"  = "#4DAF4A",
+  "Gaussiano-5k"  = "#FF7F00"
+)
+
+plot_boxplot <- function(df, algo, titulo) {
+  df_algo <- df |> filter(Algoritmo == algo, !is.na(ARI))
+
+  # Painel superior: boxplot agregado + pontos individuais por dataset
+  p_box <- df_algo |>
+    ggplot(aes(x = Label, y = ARI)) +
+    geom_boxplot(aes(fill = Label), outlier.shape = NA,
+                 width = 0.65, color = "gray20", alpha = 0.6) +
+    geom_point(aes(color = Dataset),
+               position = position_jitter(width = 0.14, seed = 42),
+               size = 2.2, alpha = 0.9) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray50", linewidth = 0.4) +
+    scale_fill_manual(values = cores_familia, guide = "none") +
+    scale_color_manual(values = cores_dataset, name = "Dataset") +
+    scale_y_continuous(limits = c(-0.25, 1.05), breaks = seq(0, 1, 0.2)) +
+    labs(title = titulo, x = NULL, y = "ARI") +
+    theme_bw(base_size = 11) +
+    theme(axis.text.x  = element_blank(),
+          axis.ticks.x = element_blank(),
+          legend.position = "right",
+          plot.title = element_text(size = 11, face = "bold"))
+
+  # Painel inferior: ARI por dataset em facets (visão individual)
+  p_facet <- df_algo |>
+    ggplot(aes(x = Label, y = ARI, color = Label)) +
+    geom_point(size = 1.8) +
+    geom_segment(aes(xend = Label, yend = 0), linewidth = 0.5, alpha = 0.6) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray50", linewidth = 0.35) +
+    facet_wrap(~ Dataset, nrow = 1) +
+    scale_color_manual(values = cores_familia, guide = "none") +
+    scale_y_continuous(limits = c(-0.25, 1.05), breaks = seq(0, 1, 0.5)) +
+    labs(x = "Método de Redução de Dimensionalidade", y = "ARI") +
+    theme_bw(base_size = 9) +
+    theme(axis.text.x  = element_text(angle = 45, hjust = 1, size = 6),
+          strip.text   = element_text(size = 8, face = "bold"),
+          panel.spacing = unit(0.3, "lines"))
+
+  patchwork::wrap_plots(p_box, p_facet, ncol = 1, heights = c(2, 1.4))
 }
 ```
 
 ```{r}
-# 2. Configurações da malha de testes
-datasets_nomes <- c("moons", "circles")
-dr_metodos     <- c("sem_reducao", "pca", "kpca", "umap")
-algoritmos     <- c("kmeans", "gmm", "ahc", "dbscan")
+#| label: fig-kmeans
+#| fig-cap: "Distribuição do ARI por método de redução — K-Means. Painel superior: boxplot agregado com pontos individuais coloridos por dataset. Painel inferior: ARI por dataset em facets."
+#| fig-height: 6.5
 
-# Data frame para armazenar os resultados
-resultados_experimento <- data.frame()
-
-# 3. Execução do experimento
-for (ds_nome in datasets_nomes) {
-  # Gera os dados sintéticos em 50 dimensões com ruído
-  dados  <- gerar_dados(n = 600, d = 50, dataset = ds_nome)
-  Xhd    <- dados$Xhd
-  y_true <- dados$y
-  
-  for (dr in dr_metodos) {
-    # Aplica o método de redução de dimensionalidade
-    if (dr == "sem_reducao") {
-      X_red <- Xhd
-    } else {
-      X_red <- reduzir(Xhd, metodo = dr, n_comp = 2)
-    }
-    
-    # Clusteriza e avalia usando todos os algoritmos
-    for (algo in algoritmos) {
-      y_pred <- clusterizar(X_red, k = 2, algoritmo = algo)
-      
-      # Calcula o Adjusted Rand Index (ARI)
-      ari <- adjustedRandIndex(y_true, y_pred)
-      
-      # Salva na tabela
-      resultados_experimento <- rbind(resultados_experimento, data.frame(
-        Dataset   = ds_nome,
-        Reducao   = dr,
-        Algoritmo = algo,
-        ARI       = round(ari, 4)
-      ))
-    }
-  }
-}
-
-# 4. Visualizando a tabela de resultados de forma pivotada
-library(tidyr)
-tabela_ari <- pivot_wider(resultados_experimento, 
-                          names_from = Algoritmo, 
-                          values_from = ARI)
-print(tabela_ari)
+plot_boxplot(resultados, "kmeans", "ARI por método de redução — K-Means")
 ```
 
-## Resultados — Moons (50 dimensões)
+```{r}
+#| label: fig-ahc
+#| fig-cap: "Distribuição do ARI por método de redução — AHC. Painel superior: boxplot agregado com pontos individuais por dataset. Painel inferior: ARI por dataset em facets."
+#| fig-height: 6.5
 
-![Moons embebido em 50D. Da esquerda para direita: ground truth 2D, clustering sem redução, após PCA, após Kernel PCA, após UMAP. Bordas: verde = ARI ≥ 0.80, laranja = 0.45–0.80, vermelha \< 0.45.](fig2_demo_moons.png){fig-align="center" width="100%"}
+plot_boxplot(resultados, "ahc", "ARI por método de redução — AHC")
+```
 
-## Resultados — Circles (50 dimensões)
+```{r}
+#| label: fig-gmm
+#| fig-cap: "Distribuição do ARI por método de redução — GMM. Painel superior: boxplot agregado com pontos individuais por dataset. Painel inferior: ARI por dataset em facets."
+#| fig-height: 4
 
-![Circles embebido em 50D. UMAP recupera a estrutura de anéis com ARI = 1.000; todos os outros métodos falham completamente (ARI ≈ 0).](fig3_demo_circles.png){fig-align="center" width="100%"}
+plot_boxplot(resultados, "gmm", "ARI por método de redução — GMM")
+```
 
-## Por que PCA Falha e UMAP Acerta?
+```{r}
+#| label: fig-optics
+#| fig-cap: "Distribuição do ARI por método de redução — OPTICS. Painel superior: boxplot agregado com pontos individuais por dataset. Painel inferior: ARI por dataset em facets."
+#| fig-height: 4
 
-::::: columns
-::: {.column width="50%"}
-**PCA — falha**
+plot_boxplot(resultados, "optics", "ARI por método de redução — OPTICS")
+```
 
-1.  Projeta nas direções de **maior variância linear**
-2.  Em 50D, as 48 dimensões de ruído contribuem variância comparável ao sinal 2D
-3.  Os 2 PCs dominantes capturam ruído, não a estrutura de meia-lua
-4.  Resultado: ARI ≈ 0.41 (Moons) · 0.00 (Circles)
+## Análise Agregada — Taxa de Vitórias
 
-**Kernel PCA — melhora parcialmente**
+Para cada combinação DR × nível, calcula a proporção de datasets em que a redução supera o baseline (sem redução) e o ganho médio de ARI — replicando as Tabelas 2–5 do artigo.
 
-- Kernel RBF detecta relações não-lineares locais
-- Mas $\sigma = 1/d$ padrão pode subestimar a escala intrínseca
-- Melhora Moons levemente; não resolve Circles
-:::
+```{r}
+#| label: tbl-winrate
 
-::: {.column width="50%"}
-**UMAP — acerta**
+baseline_ari <- resultados |>
+  filter(DR == "sem_reducao") |>
+  select(Dataset, Algoritmo, ARI_base = ARI)
 
-1.  Constrói **grafo de** $k$-vizinhos no espaço 50D
-2.  Cada ponto conecta aos 15 vizinhos mais próximos
-3.  Otimiza embedding 2D preservando esse grafo topológico
-4.  A estrutura de meia-lua/anel é **robusta localmente** mesmo com ruído global dominante
+taxa_vitorias <- resultados |>
+  filter(DR != "sem_reducao", !is.na(ARI)) |>
+  left_join(baseline_ari, by = c("Dataset", "Algoritmo")) |>
+  mutate(ganhou = ARI > ARI_base,
+         delta  = ARI - ARI_base) |>
+  group_by(Algoritmo, DR, Nivel) |>
+  summarise(
+    `Win Rate` = scales::percent(mean(ganhou, na.rm = TRUE), accuracy = 1),
+    `ΔARI médio` = round(mean(delta, na.rm = TRUE), 3),
+    .groups = "drop"
+  ) |>
+  arrange(Algoritmo, DR, Nivel)
 
-| Método     |   Moons   |  Circles  |
-|------------|:---------:|:---------:|
-| Sem DR     |   0.413   |   0.000   |
-| PCA        |   0.413   |   0.000   |
-| Kernel PCA |   0.499   |   0.000   |
-| **UMAP**   | **0.987** | **1.000** |
-:::
-:::::
+kable(taxa_vitorias,
+      caption = "Taxa de vitórias e ganho médio de ARI vs. baseline sem redução")
+```
 
-------------------------------------------------------------------------
+## Heatmap — ARI Médio por Combinação DR × Algoritmo
 
-# Resultados do Artigo
+```{r}
+#| label: fig-heatmap
+#| fig-cap: "ARI médio por método de redução (melhor nível) e algoritmo de clusterização"
+#| fig-height: 3.5
 
-## Comparação Multi-Dataset × Multi-Algoritmo
+resultados |>
+  filter(!is.na(ARI)) |>
+  group_by(DR, Algoritmo) |>
+  summarise(ARI_medio = mean(ARI, na.rm = TRUE), .groups = "drop") |>
+  mutate(DR = factor(DR,
+           levels = c("sem_reducao", "pca", "kpca", "isomap", "mds", "umap"),
+           labels = c("Sem redução", "PCA", "Kernel PCA", "Isomap", "MDS", "UMAP")),
+         Algoritmo = toupper(Algoritmo)) |>
+  ggplot(aes(x = Algoritmo, y = DR, fill = ARI_medio)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = round(ARI_medio, 2)), size = 3.5, color = "white", fontface = "bold") +
+  scale_fill_gradient2(low = "#d73027", mid = "#ffffbf", high = "#1a9850",
+                       midpoint = 0.5, limits = c(0, 1), name = "ARI médio") +
+  labs(x = "Algoritmo de clusterização",
+       y = "Método de redução",
+       title = "ARI médio por par DR × algoritmo (todos os níveis e datasets)") +
+  theme_minimal(base_size = 11) +
+  theme(plot.title = element_text(size = 10, face = "bold"))
+```
 
-![ARI por método de redução, dataset (Moons/Circles) e algoritmo (K-Means/GMM), dados embebidos em 50D.](fig4_ari_comparacao.png){fig-align="center" width="90%"}
+## Efeito do Nível de Redução
 
-## Dados Sintéticos — Achados por Algoritmo
+Verifica se o nível de compressão (k−1, 25%, 50%) impacta o ARI de forma consistente — replicando a análise da Seção 4.3 do artigo.
 
-**K-Means**
+```{r}
+#| label: fig-niveis
+#| fig-cap: "ARI médio por nível de redução e algoritmo (todos os DRs, exceto baseline)"
+#| fig-height: 4
 
-- Kernel PCA vence em 73% dos datasets sintéticos (ganho médio +18% de ARI no nível 50%)
-- PCA performa como baseline — ganho negligenciável
-- VAE instável: ARI médio negativo em Circles e Moons
-
-**AHC (Hierárquico)**
-
-- Isomap é o melhor no geral (+13% em 50%). Kernel PCA competitivo e consistente
-- VAE **prejudica** AHC. A representação probabilística distorce as distâncias de ligação do Ward
-
-**GMM**
-
-- Isomap novamente o melhor (62% de vitórias, +16% de ARI)
-- Kernel PCA também forte; MDS e VAE instáveis
-
-**OPTICS**
-
-- Todos os DRs **perdem** para o baseline nos sintéticos
-- Em dados reais, Kernel PCA (+7% no nível k−1) e VAE (+4.6%) surpreendem
-
-## Dados Reais (20 datasets UCI)
-
-| Algoritmo | Melhor DR | Observação |
-|------------------------|------------------------|------------------------|
-| **K-Means** | *(baseline)* | DR raramente melhora; Kernel PCA chega a −9% de ARI |
-| **AHC** | Kernel PCA (k−1) | Único com vantagem consistente: 66.7% dos datasets |
-| **GMM** | Isomap (50%) | PCA tem vitórias pontuais (ex.: Iris +0.18 ARI) |
-| **OPTICS** | Kernel PCA (k−1) | 73% de vitórias; VAE tem alta taxa mas variância enorme |
-
-::: callout-warning
-## Teste de Wilcoxon (Tabela A.9 do artigo)
-
-Apenas **Kernel PCA + OPTICS** mostrou significância estatística (p \< 0.05) nos níveis k−1 e 25%. Os demais ganhos podem ser acidentais.
-:::
-
-## Impacto do Nível de Redução
-
-![Impacto do nível de redução no ARI do K-Means. Dataset Moons, d=50. A linha tracejada indica o baseline sem redução.](fig5_niveis_reducao.png){fig-align="center" width="90%"}
-
-**Interpretação:**
-
-| Nível   | Dims (d=50) | Resultado                                        |
-|---------|:-----------:|--------------------------------------------------|
-| **k−1** |      1      | Muito agressivo — destrói sinal junto com ruído  |
-| **25%** |     12      | Bom equilíbrio sinal/ruído                       |
-| **50%** |     25      | **Melhor desempenho médio** na maioria dos casos |
-| 70%     |     35      | Benefício marginal; mantém ruído excessivo       |
-
-------------------------------------------------------------------------
-
-# Recomendações Práticas
-
-## Guia de Seleção: DR × Algoritmo
-
-```         
-Minha estrutura é não-linear?
-        │
-        ├─ SIM ─► Kernel PCA ou Isomap  (nível: 25–50%)
-        │          Dados de manifold → considerar UMAP*
-        │
-        └─ NÃO ─► PCA como baseline confiável
-                   (performance similar a sem redução)
-
-
-Qual algoritmo de clustering?
-┌─────────────┬────────────────────────────────────────────────────┐
-│ K-Means     │ Isomap ou PCA — baixo risco, ganho moderado        │
-│ AHC         │ Kernel PCA (melhor), depois Isomap                 │
-│ GMM         │ Isomap (50%) ou Kernel PCA — curvature-aware       │
-│ OPTICS      │ Kernel PCA (k−1) — validar vizinhança antes        │
-└─────────────┴────────────────────────────────────────────────────┘
+resultados |>
+  filter(DR != "sem_reducao", !is.na(ARI)) |>
+  mutate(Nivel = factor(Nivel, levels = c("k-1", "25%", "50%")),
+         Algoritmo = toupper(Algoritmo)) |>
+  group_by(Nivel, Algoritmo) |>
+  summarise(ARI_medio = mean(ARI, na.rm = TRUE),
+            ARI_sd    = sd(ARI, na.rm = TRUE),
+            .groups = "drop") |>
+  ggplot(aes(x = Nivel, y = ARI_medio, color = Algoritmo, group = Algoritmo)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2.5) +
+  geom_errorbar(aes(ymin = ARI_medio - ARI_sd, ymax = ARI_medio + ARI_sd),
+                width = 0.1, alpha = 0.4) +
+  scale_color_brewer(palette = "Set1") +
+  labs(x = "Nível de redução de dimensionalidade",
+       y = "ARI médio (± 1 DP)",
+       color = "Algoritmo",
+       title = "Impacto do nível de redução no ARI por algoritmo") +
+  theme_bw(base_size = 11)
 ```
 
 ------------------------------------------------------------------------
-
-# Conclusões
-
-## Três Achados Principais
-
-**1. O par DR + algoritmo é decisivo**
-
-Não existe método universal. O mesmo DR pode ser o melhor e o pior dependendo do algoritmo de clustering — a escolha errada pode custar até 25% de ARI.
-
-**2. Redução moderada supera os extremos**
-
-O nível 25–50% das features oferece o melhor equilíbrio sinal/ruído. k−1 é agressivo demais; redução insuficiente mantém o problema original.
-
-**3. Domínio importa: sintéticos ≠ reais**
-
-Ganhos em dados sintéticos não garantem ganhos em dados reais heterogêneos.
 
 # Referências
 
-- Amate, Bakhtyari, Roy & Makarenkov (2026). *Assessing the impact of dimensionality reduction on clustering performance — a systematic study.* arXiv:2604.22099
+-   Amate, Bakhtyari, Roy & Makarenkov (2026). *Assessing the impact of dimensionality reduction on clustering performance — a systematic study.* arXiv:2604.22099
 
-- Beyer, Goldstein, Ramakrishnan & Shaft (1999). When is "nearest neighbor" meaningful? *ICDT*, LNCS 1540, 217–235.
+-   Beyer, Goldstein, Ramakrishnan & Shaft (1999). When is "nearest neighbor" meaningful? *ICDT*, LNCS 1540, 217–235.
 
-- Ding & He (2004). K-means clustering via principal component analysis. *ICML*, 225–232.
+-   Ding & He (2004). K-means clustering via principal component analysis. *ICML*, 225–232.
 
-- McInnes & Healy (2018). UMAP: Uniform Manifold Approximation and Projection for dimension reduction. *arXiv:1802.03426*
+-   McInnes & Healy (2018). UMAP: Uniform Manifold Approximation and Projection for dimension reduction. *arXiv:1802.03426*
