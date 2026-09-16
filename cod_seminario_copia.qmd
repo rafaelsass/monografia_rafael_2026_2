@@ -15,7 +15,7 @@ format:
     number-sections: true
 execute:
   echo: true
-  eval: false
+  eval: true
   warning: false
   message: false
 ---
@@ -158,10 +158,6 @@ $$\text{SNR}_{2} = 1.00 \qquad \longrightarrow \qquad \text{SNR}_{50} \approx \f
 A mesma separação que é *óbvia* em 2D torna-se *invisível* em 50D. A redução dimensional restaura o SNR ao eliminar as dimensões que contribuem apenas com ruído, permitindo que $B/W$ volte a discriminar os clusters.
 :::
 
-## Evidência Visual
-
-![A maldição da dimensionalidade: estrutura clara em 2D (esq.), coeficiente de variação das distâncias caindo com $d$ (centro), mesmos dados em 50D projetados via PCA — estrutura desaparece (dir.)](fig1_motivacao.png){fig-align="center"}
-
 ------------------------------------------------------------------------
 
 # Replica do estudo de Amate et al. (2026)
@@ -189,10 +185,6 @@ A mesma separação que é *óbvia* em 2D torna-se *invisível* em 50D. A reduç
 | GMM       | Probabilístico (EM)  |
 | OPTICS    | Baseado em densidade |
 
-**Datasets**
-
--   datasets sintéticos gerados via código
--   20 datasets reais do repositório UCI
 :::
 :::::
 
@@ -257,7 +249,7 @@ $$\text{RI} = \frac{a + b}{\binom{n}{2}}, \quad a = \text{pares no mesmo cluster
 
 # Experimento Sistemático
 
-Reprodução controlada da metodologia de Amate et al. (2026): quatro métodos de redução (PCA, Kernel PCA, Isomap, MDS) × quatro algoritmos de clusterização (K-Means, AHC, GMM, OPTICS) × três níveis de redução (k−1, 25%, 50%) sobre quatro tipos de datasets sintéticos em 50 dimensões.
+Reprodução controlada da metodologia de Amate et al. (2026): cinco métodos de redução (PCA, Kernel PCA, Isomap, MDS, UMAP) × quatro algoritmos de clusterização (K-Means, AHC, GMM, OPTICS) × três níveis de redução (k−1, 25%, 50%) sobre quatro tipos de datasets sintéticos em 50 dimensões.
 
 ## Configuração do Experimento
 
@@ -407,37 +399,9 @@ clusterizar <- function(X, k, algoritmo, seed = SEED) {
 }
 ```
 
-## Estrutura dos Datasets e Limitações do Isomap
-
-### Como os dados gaussianos são gerados
-
-Os datasets `gauss3` e `gauss5` seguem uma estrutura de **misturas gaussianas isotrópicas** em alta dimensão. Para cada cluster $i = 1, \ldots, k$, o centroide $\mu_i$ é sorteado de $\mathcal{N}(0,\, \text{sep}^2 \cdot I_d)$ e, ao redor dele, $n_c$ pontos são amostrados de $\mathcal{N}(\mu_i,\, I_d)$. A separação `sep = 3` garante que os centroides fiquem afastados em média $\approx 3\sqrt{d}$ entre si — suficiente para estrutura de clusters bem definida mesmo em $d = 50$.
-
-Diferentemente dos datasets Moons e Circles, os dados gaussianos **não têm estrutura de variedade** (*manifold*). Eles são nuvens convexas, esféricas e preenchidas. Essa distinção é decisiva para o comportamento dos métodos de redução.
-
-### Por que o Isomap não funciona bem com dados gaussianos
-
-O Isomap opera em três passos:
-
-1. Constrói um grafo k-NN sobre os pontos em espaço ambiente
-2. Calcula distâncias **geodésicas** como menor caminho no grafo
-3. Aplica MDS clássico sobre essas distâncias geodésicas
-
-A hipótese central do Isomap é que os dados vivem em uma **variedade de baixa dimensão** onde a distância ao longo da superfície (geodésica) difere significativamente da distância euclidiana no espaço ambiente — como ocorre com uma lua crescente enrolada ou um toro embebido em $\mathbb{R}^3$.
-
-::: callout-important
-## Isomap e dados gaussianos: incompatibilidade estrutural
-
-Dados gaussianos isotrópicos são sólidos convexos: o caminho mais curto entre dois pontos **dentro do blob** já é a linha reta (distância euclidiana). Não há superfície curvada a "desenrolar". O Isomap não ganha nada em relação ao MDS clássico nesses dados.
-
-Pior: em $d = 50$ dimensões, o grafo k-NN pode ter **componentes desconectados** entre clusters. Caminhos geodésicos podem cruzar clusters erroneamente via pontos intermediários, distorcendo a embedding e misturando os grupos. Quando o grafo é desconectado, `vegan::isomap()` retorna erro — tratado com `tryCatch` no código abaixo.
-:::
-
-Essa é a razão pela qual Amate et al. (2026) reporta que o Isomap tem desempenho **instável e dependente da geometria intrínseca** do dataset — excelente em variedades (Moons, Circles), porém problemático em dados gaussianos estruturados.
-
 ### Projeção em 2D por método de redução
 
-A primeira linha da grade mostra os dados em sua **geometria original em 2D** — a "face verdadeira" de cada dataset antes da expansão para 50 dimensões via projeção gaussiana aleatória. As linhas seguintes aplicam cada método de redução ao espaço de 2 componentes sobre os dados já em 50D. A comparação revela o quanto cada técnica consegue *recuperar* a estrutura original.
+Comparação entre a estrutura original dos dados sem o embedding em dimensões superiores e as representações em duas dimensões dos algoritmos de redução de dimensionalidade. 
 
 ```{r}
 #| label: vis-datasets-2d
@@ -445,8 +409,6 @@ A primeira linha da grade mostra os dados em sua **geometria original em 2D** �
 #| fig-cap: "Grade 6×4: linhas = método (2D original + 5 técnicas de DR), colunas = dataset. A linha '2D original' é a geometria nativa antes do embedding em 50D — serve de referência para avaliar quanto cada método de redução recupera a estrutura verdadeira. Pontos ausentes no Isomap indicam falha por grafo k-NN desconectado."
 
 # Gera versões 2D nativas de cada dataset (mesmos parâmetros, sem embedding HD)
-# set.seed() individual garante que Moons/Circles 2D sejam idênticos ao X2d
-# que foi embebido no HD — é exatamente a "face verdadeira" antes do embedding.
 gerar_baseline_2d <- function(seed = SEED) {
   n <- 400; n2 <- n %/% 2
 
@@ -546,61 +508,80 @@ Leituras esperadas da grade:
 #| label: execucao-experimento
 #| cache: true
 
+N_REP      <- 100
 dr_metodos <- c("sem_reducao", "pca", "kpca", "isomap", "mds", "umap")
 algoritmos <- c("kmeans", "ahc", "gmm", "optics")
 niveis_dr  <- c("k-1", "25%", "50%")
 
-resultados <- data.frame()
+# Acumula em lista para evitar crescimento quadrático por rbind incremental
+resultados_list <- vector("list", N_REP * 4 * 19 * 4)
+idx <- 1L
 
-for (ds_nome in names(datasets)) {
-  ds <- datasets[[ds_nome]]
-  X  <- ds$X
-  y  <- ds$y
-  k  <- ds$k
-  d  <- ncol(X)
+for (rep in seq_len(N_REP)) {
+  # Cada repetição usa uma semente distinta para garantir variação real entre réplicas
+  seed_rep <- SEED + rep - 1L
 
-  for (dr in dr_metodos) {
-    niveis_iter <- if (dr == "sem_reducao") list(list(nivel = NA, label = "Sem redução"))
-                   else lapply(niveis_dr, function(nv)
-                     list(nivel = nv, label = paste(toupper(dr), nv)))
+  datasets_rep <- list(
+    moons   = make_moons_hd(n = 400, d = 50, seed = seed_rep),
+    circles = make_circles_hd(n = 400, d = 50, seed = seed_rep),
+    gauss3  = make_gaussiano_hd(k = 3, d = 50, nc = 80, seed = seed_rep),
+    gauss5  = make_gaussiano_hd(k = 5, d = 50, nc = 60, seed = seed_rep)
+  )
 
-    for (it in niveis_iter) {
-      nivel <- it$nivel
-      label <- it$label
+  for (ds_nome in names(datasets_rep)) {
+    ds <- datasets_rep[[ds_nome]]
+    X  <- ds$X
+    y  <- ds$y
+    k  <- ds$k
+    d  <- ncol(X)
 
-      if (dr == "sem_reducao") {
-        X_red  <- X
-        n_comp <- d
-      } else {
-        n_comp <- n_comp_nivel(d, k, nivel)
-        X_red  <- tryCatch(reduzir(X, dr, n_comp), error = function(e) NULL)
-        if (is.null(X_red)) next
-      }
+    for (dr in dr_metodos) {
+      niveis_iter <- if (dr == "sem_reducao") list(list(nivel = NA, label = "Sem redução"))
+                     else lapply(niveis_dr, function(nv)
+                       list(nivel = nv, label = paste(toupper(dr), nv)))
 
-      for (algo in algoritmos) {
-        y_pred <- tryCatch(clusterizar(X_red, k, algo), error = function(e) NULL)
-        if (is.null(y_pred)) next
+      for (it in niveis_iter) {
+        nivel <- it$nivel
+        label <- it$label
 
-        # OPTICS marca ruído como 0 — remove do cálculo do ARI
-        validos <- y_pred != 0
-        ari <- if (sum(validos) >= 10)
-                 adjustedRandIndex(y[validos], y_pred[validos])
-               else NA_real_
+        if (dr == "sem_reducao") {
+          X_red  <- X
+          n_comp <- d
+        } else {
+          n_comp <- n_comp_nivel(d, k, nivel)
+          X_red  <- tryCatch(reduzir(X, dr, n_comp), error = function(e) NULL)
+          if (is.null(X_red)) next
+        }
 
-        resultados <- rbind(resultados, data.frame(
-          Dataset   = ds$nome,
-          DR        = dr,
-          Nivel     = ifelse(is.na(nivel), "—", nivel),
-          Label     = label,
-          Algoritmo = algo,
-          n_comp    = n_comp,
-          ARI       = ari,
-          stringsAsFactors = FALSE
-        ))
+        for (algo in algoritmos) {
+          y_pred <- tryCatch(clusterizar(X_red, k, algo), error = function(e) NULL)
+          if (is.null(y_pred)) next
+
+          # OPTICS marca ruído como 0 — remove do cálculo do ARI
+          validos <- y_pred != 0
+          ari <- if (sum(validos) >= 10)
+                   adjustedRandIndex(y[validos], y_pred[validos])
+                 else NA_real_
+
+          resultados_list[[idx]] <- data.frame(
+            Rep       = rep,
+            Dataset   = ds$nome,
+            DR        = dr,
+            Nivel     = ifelse(is.na(nivel), "—", nivel),
+            Label     = label,
+            Algoritmo = algo,
+            n_comp    = n_comp,
+            ARI       = ari,
+            stringsAsFactors = FALSE
+          )
+          idx <- idx + 1L
+        }
       }
     }
   }
 }
+
+resultados <- do.call(rbind, resultados_list[seq_len(idx - 1L)])
 
 # Ordena os rótulos do eixo x como no artigo
 ordem_labels <- c(
@@ -616,7 +597,7 @@ resultados$Label <- factor(resultados$Label, levels = ordem_labels)
 
 ## Resultados — Boxplots por Algoritmo {#sec-boxplots}
 
-Reprodução das Figuras 3–6 de Amate et al. (2026): distribuição do ARI para cada combinação de método de redução e nível, agrupada por algoritmo de clusterização.
+Reprodução das Figuras 3–6 de Amate et al. (2026): distribuição do ARI (100 réplicas) para cada combinação de método de redução e nível, separada por dataset e algoritmo de clusterização.
 
 ```{r}
 #| label: boxplot-fn
@@ -630,89 +611,64 @@ cores_familia <- c(
   "UMAP k-1" = "#CCB974", "UMAP 25%" = "#CCB974", "UMAP 50%" = "#CCB974"
 )
 
-cores_dataset <- c(
-  "Moons"         = "#E41A1C",
-  "Circles"       = "#377EB8",
-  "Gaussiano-3k"  = "#4DAF4A",
-  "Gaussiano-5k"  = "#FF7F00"
-)
-
 plot_boxplot <- function(df, algo, titulo) {
-  df_algo <- df |> filter(Algoritmo == algo, !is.na(ARI))
-
-  # Painel superior: boxplot agregado + pontos individuais por dataset
-  p_box <- df_algo |>
+  df |>
+    filter(Algoritmo == algo, !is.na(ARI)) |>
     ggplot(aes(x = Label, y = ARI)) +
     geom_boxplot(aes(fill = Label), outlier.shape = NA,
                  width = 0.65, color = "gray20", alpha = 0.6) +
-    geom_point(aes(color = Dataset),
-               position = position_jitter(width = 0.14, seed = 42),
-               size = 2.2, alpha = 0.9) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "gray50", linewidth = 0.4) +
-    scale_fill_manual(values = cores_familia, guide = "none") +
-    scale_color_manual(values = cores_dataset, name = "Dataset") +
-    scale_y_continuous(limits = c(-0.25, 1.05), breaks = seq(0, 1, 0.2)) +
-    labs(title = titulo, x = NULL, y = "ARI") +
-    theme_bw(base_size = 11) +
-    theme(axis.text.x  = element_blank(),
-          axis.ticks.x = element_blank(),
-          legend.position = "right",
-          plot.title = element_text(size = 11, face = "bold"))
-
-  # Painel inferior: ARI por dataset em facets (visão individual)
-  p_facet <- df_algo |>
-    ggplot(aes(x = Label, y = ARI, color = Label)) +
-    geom_point(size = 1.8) +
-    geom_segment(aes(xend = Label, yend = 0), linewidth = 0.5, alpha = 0.6) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray50", linewidth = 0.35) +
     facet_wrap(~ Dataset, nrow = 1) +
-    scale_color_manual(values = cores_familia, guide = "none") +
+    scale_fill_manual(values = cores_familia, guide = "none") +
     scale_y_continuous(limits = c(-0.25, 1.05), breaks = seq(0, 1, 0.5)) +
-    labs(x = "Método de Redução de Dimensionalidade", y = "ARI") +
+    labs(title = titulo, x = "Método de Redução de Dimensionalidade", y = "ARI") +
     theme_bw(base_size = 9) +
-    theme(axis.text.x  = element_text(angle = 45, hjust = 1, size = 6),
+    theme(axis.text.x  = element_text(angle = 45, hjust = 1, size = 5),
           strip.text   = element_text(size = 8, face = "bold"),
-          panel.spacing = unit(0.3, "lines"))
-
-  patchwork::wrap_plots(p_box, p_facet, ncol = 1, heights = c(2, 1.4))
+          panel.spacing = unit(0.3, "lines"),
+          plot.title   = element_text(size = 11, face = "bold"))
 }
 ```
 
 ```{r}
 #| label: fig-kmeans
-#| fig-cap: "Distribuição do ARI por método de redução — K-Means. Painel superior: boxplot agregado com pontos individuais coloridos por dataset. Painel inferior: ARI por dataset em facets."
-#| fig-height: 6.5
+#| fig-cap: "Distribuição do ARI por método de redução — K-Means. Cada boxplot resume 100 réplicas; facets separam os quatro datasets."
+#| fig-height: 4.5
+#| fig-width: 9
 
 plot_boxplot(resultados, "kmeans", "ARI por método de redução — K-Means")
 ```
 
 ```{r}
 #| label: fig-ahc
-#| fig-cap: "Distribuição do ARI por método de redução — AHC. Painel superior: boxplot agregado com pontos individuais por dataset. Painel inferior: ARI por dataset em facets."
-#| fig-height: 6.5
+#| fig-cap: "Distribuição do ARI por método de redução — AHC. Cada boxplot resume 100 réplicas; facets separam os quatro datasets."
+#| fig-height: 4.5
+#| fig-width: 9
 
 plot_boxplot(resultados, "ahc", "ARI por método de redução — AHC")
 ```
 
 ```{r}
 #| label: fig-gmm
-#| fig-cap: "Distribuição do ARI por método de redução — GMM. Painel superior: boxplot agregado com pontos individuais por dataset. Painel inferior: ARI por dataset em facets."
-#| fig-height: 4
+#| fig-cap: "Distribuição do ARI por método de redução — GMM. Cada boxplot resume 100 réplicas; facets separam os quatro datasets."
+#| fig-height: 4.5
+#| fig-width: 9
 
 plot_boxplot(resultados, "gmm", "ARI por método de redução — GMM")
 ```
 
 ```{r}
 #| label: fig-optics
-#| fig-cap: "Distribuição do ARI por método de redução — OPTICS. Painel superior: boxplot agregado com pontos individuais por dataset. Painel inferior: ARI por dataset em facets."
-#| fig-height: 4
+#| fig-cap: "Distribuição do ARI por método de redução — OPTICS. Cada boxplot resume 100 réplicas; facets separam os quatro datasets."
+#| fig-height: 4.5
+#| fig-width: 9
 
 plot_boxplot(resultados, "optics", "ARI por método de redução — OPTICS")
 ```
 
 ## Análise Agregada — Taxa de Vitórias
 
-Para cada combinação DR × nível, calcula a proporção de datasets em que a redução supera o baseline (sem redução) e o ganho médio de ARI — replicando as Tabelas 2–5 do artigo.
+Para cada combinação DR × nível, calcula a proporção de datasets em que a redução supera o baseline (sem redução) e o ganho médio de ARI.
 
 ```{r}
 #| label: tbl-winrate
@@ -767,7 +723,7 @@ resultados |>
 
 ## Efeito do Nível de Redução
 
-Verifica se o nível de compressão (k−1, 25%, 50%) impacta o ARI de forma consistente — replicando a análise da Seção 4.3 do artigo.
+Verifica se o nível de compressão (k−1, 25%, 50%) impacta o ARI de forma consistente.
 
 ```{r}
 #| label: fig-niveis
