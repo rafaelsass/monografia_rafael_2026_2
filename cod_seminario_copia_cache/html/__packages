@@ -1,0 +1,12 @@
+kernlab
+mclust
+dbscan
+permute
+vegan
+MASS
+umap
+ggplot2
+patchwork
+dplyr
+tidyr
+knitr
