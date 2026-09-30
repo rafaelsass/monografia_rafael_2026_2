@@ -1,0 +1,25 @@
+# R
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
+.Renviron
+
+# renv
+renv/library/
+renv/staging/
+
+# Quarto cache e artefatos de build
+*_cache/
+*_files/
+.quarto/
+
+# Outputs renderizados (manter só o do commit principal, se desejar)
+# *.html
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
