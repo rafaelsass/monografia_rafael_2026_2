@@ -255,7 +255,7 @@ Reprodução controlada da metodologia de Amate et al. (2026): cinco métodos de
 ```{r}
 #| label: setup-experimento
 
-library(kernlab)   # Kernel PCA
+library(kernlab)   # Kernel PCA + sigest
 library(mclust)    # GMM + adjustedRandIndex
 library(dbscan)    # OPTICS
 library(vegan)     # Isomap
@@ -266,6 +266,7 @@ library(patchwork) # composição de painéis
 library(dplyr)
 library(tidyr)
 library(knitr)
+library(scales)    # percent() em tbl-winrate
 
 SEED <- 42
 ```
@@ -336,14 +337,20 @@ n_comp_nivel <- function(d, k, nivel) {
   )
 }
 
-# Aplica o método de redução de dimensionalidade
+# Aplica o método de redução de dimensionalidade.
+# sigma do KPCA: sigest(X)[2] — estimador de quantil 50% das distâncias
+# quadráticas inter-pontos, específico para kernels RBF (Caputo et al., 2002).
 reduzir <- function(X, metodo, n_comp) {
+  # Protege contra n_comp >= posto da matriz (quebra PCA, KPCA, MDS)
+  n_comp <- min(n_comp, nrow(X) - 1L, ncol(X))
   switch(metodo,
     pca = {
       prcomp(X, center = FALSE)$x[, seq_len(n_comp), drop = FALSE]
     },
     kpca = {
-      fit <- kpca(X, kernel = "rbfdot", features = n_comp)
+      fit <- kpca(X, kernel = "rbfdot",
+                  kpar     = list(sigma = sigest(X)[2]),
+                  features = n_comp)
       rotated(fit)
     },
     isomap = {
@@ -365,7 +372,7 @@ reduzir <- function(X, metodo, n_comp) {
   )
 }
 
-# Aplica o algoritmo de clusterização e retorna labels
+# Aplica o algoritmo de clusterização e retorna labels (NULL = falha tratável)
 clusterizar <- function(X, k, algoritmo, seed = SEED) {
   set.seed(seed)
   switch(algoritmo,
@@ -378,19 +385,23 @@ clusterizar <- function(X, k, algoritmo, seed = SEED) {
 
     gmm = {
       fit <- Mclust(X, G = k, verbose = FALSE)
-      if (is.null(fit)) rep(1L, nrow(X)) else fit$classification
+      # Mclust retorna NULL sem lançar erro quando não converge.
+      # Propagar NULL para ser registrado como NA, não como ARI de partição trivial.
+      if (is.null(fit)) NULL else fit$classification
     },
 
     optics = {
-      opt <- optics(X, minPts = 5)
+      # minPts adaptativo: 2% do n, mínimo 5 — mais robusto a datasets pequenos
+      opt <- optics(X, minPts = max(5L, as.integer(nrow(X) * 0.02)))
       res <- extractXi(opt, xi = 0.05, minimum = TRUE)
       cl  <- res$cluster
-      # Seleciona os k clusters com mais pontos
-      ids_validos <- cl[cl > 0]
-      if (length(unique(ids_validos)) >= k) {
-        top_k <- as.integer(names(sort(table(ids_validos), decreasing = TRUE)[seq_len(k)]))
-        match(cl, top_k, nomatch = 0L)
-      } else cl
+      ids_validos   <- cl[cl > 0]
+      n_encontrados <- length(unique(ids_validos))
+      if (n_encontrados < 2L) return(NULL)  # sem estrutura detectável → NA
+      # Seleciona os min(k, n_encontrados) clusters maiores e relabela
+      n_sel <- min(k, n_encontrados)
+      top_k <- as.integer(names(sort(table(ids_validos), decreasing = TRUE)[seq_len(n_sel)]))
+      match(cl, top_k, nomatch = 0L)
     }
   )
 }
@@ -840,6 +851,72 @@ resultados |>
        color = "DR", shape = "Algoritmo",
        title = "Qualidade vs. Custo computacional") +
   theme_bw(base_size = 11)
+```
+
+```{r}
+#| label: fig-ari-vs-tempo
+#| fig-cap: "ARI médio vs. custo real medido por chamada (ms, escala log). Cada ponto é um par DR × Algoritmo. O custo atribuído ao par é tempo_DR/4 + tempo_clustering — a divisão por 4 reflete que a mesma projeção é reutilizada pelos quatro algoritmos. Pontos no canto superior esquerdo dominam em eficiência."
+#| fig-height: 5.5
+#| fig-width: 10
+
+df_pareto <- bind_rows(
+  resultados |>
+    filter(DR != "sem_reducao", !is.na(ARI)) |>
+    group_by(DR, Algoritmo) |>
+    summarise(
+      ARI_medio = mean(ARI, na.rm = TRUE),
+      custo_ms  = mean(tempo_dr_ms, na.rm = TRUE) / 4 + mean(tempo_cl_ms, na.rm = TRUE),
+      .groups   = "drop"
+    ),
+  resultados |>
+    filter(DR == "sem_reducao", !is.na(ARI)) |>
+    group_by(DR, Algoritmo) |>
+    summarise(
+      ARI_medio = mean(ARI, na.rm = TRUE),
+      custo_ms  = mean(tempo_cl_ms, na.rm = TRUE),
+      .groups   = "drop"
+    )
+) |>
+  mutate(
+    DR_label  = factor(
+      toupper(DR),
+      levels = c("SEM_REDUCAO", "PCA", "KPCA", "ISOMAP", "MDS", "UMAP"),
+      labels = c("Sem DR", "PCA", "KPCA", "Isomap", "MDS", "UMAP")
+    ),
+    Algoritmo = toupper(Algoritmo),
+    rotulo    = paste0(DR_label, "/", Algoritmo)
+  )
+
+ggplot(df_pareto, aes(x = custo_ms, y = ARI_medio,
+                      color = DR_label, shape = Algoritmo)) +
+  geom_vline(
+    data = df_pareto |> filter(DR_label == "Sem DR"),
+    aes(xintercept = custo_ms, linetype = Algoritmo),
+    color = "grey60", alpha = 0.5, linewidth = 0.4
+  ) +
+  geom_point(size = 4, alpha = 0.9) +
+  geom_text(aes(label = rotulo),
+            size = 2.4, vjust = -0.9, hjust = 0.5,
+            show.legend = FALSE) +
+  scale_x_log10(
+    labels = scales::label_number(accuracy = 0.1, suffix = " ms"),
+    breaks = c(1, 5, 10, 50, 100, 500, 1000, 2000)
+  ) +
+  scale_y_continuous(limits = c(NA, 1.05), breaks = seq(0, 1, 0.2)) +
+  scale_color_brewer(palette = "Set1", name = "Método de DR") +
+  scale_shape_manual(values = c(15, 16, 17, 18), name = "Algoritmo") +
+  scale_linetype_manual(values = c(2, 3, 4, 5), guide = "none") +
+  labs(
+    x     = "Custo atribuído médio por chamada  (log ms  |  DR/4 + clustering)",
+    y     = "ARI médio",
+    title = "Eficiência: qualidade vs. custo computacional real medido"
+  ) +
+  theme_bw(base_size = 11) +
+  theme(
+    legend.position  = "bottom",
+    legend.box       = "horizontal",
+    panel.grid.minor = element_blank()
+  )
 ```
 
 ```{r}

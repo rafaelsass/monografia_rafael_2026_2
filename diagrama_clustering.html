@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparação de Algoritmos de Clusterização</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: #F1F5F9;
+  color: #1E293B;
+  padding: 36px 40px 48px;
+  min-height: 100vh;
+}
+
+/* ── Cabeçalho ─────────────────────────────────────────── */
+.page-header { margin-bottom: 32px; }
+.page-title  { font-size: 22px; font-weight: 800; color: #0F172A; letter-spacing: -0.02em; }
+.page-sub    { font-size: 13px; color: #64748B; margin-top: 4px; }
+
+/* ── Grade principal ─────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: 148px repeat(5, 1fr);
+  gap: 6px;
+}
+
+/* ── Linha de cabeçalho das etapas ────────────────────────── */
+.corner { /* célula vazia superior-esquerda */ }
+
+.step-head {
+  background: #0F172A;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 5px;
+}
+.step-num {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; color: #fff;
+}
+.step-name {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  color: #CBD5E1;
+  line-height: 1.3;
+}
+.step-desc {
+  font-size: 10px; color: #64748B; line-height: 1.3;
+}
+
+/* ── Nome do algoritmo (coluna esquerda) ─────────────────── */
+.algo-name {
+  border-radius: 8px;
+  padding: 14px 14px;
+  display: flex; flex-direction: column;
+  justify-content: center;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.algo-name::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.12);
+  border-radius: 8px;
+}
+.algo-label {
+  font-size: 15px; font-weight: 800;
+  position: relative;
+  letter-spacing: -0.01em;
+}
+.algo-tag {
+  font-size: 10px; font-weight: 500;
+  opacity: 0.85; margin-top: 4px;
+  position: relative;
+  line-height: 1.4;
+}
+
+/* Cores dos algoritmos */
+.km-bg  { background: linear-gradient(135deg, #1D4ED8 0%, #2563EB 100%); }
+.ahc-bg { background: linear-gradient(135deg, #065F46 0%, #047857 100%); }
+.gmm-bg { background: linear-gradient(135deg, #92400E 0%, #B45309 100%); }
+.opc-bg { background: linear-gradient(135deg, #4C1D95 0%, #6D28D9 100%); }
+
+/* ── Células de conteúdo ──────────────────────────────────── */
+.cell {
+  background: #fff;
+  border-radius: 8px;
+  padding: 13px 14px;
+  border: 1px solid #E2E8F0;
+  display: flex; flex-direction: column;
+  gap: 7px;
+  transition: box-shadow .15s;
+}
+.cell:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+
+.cell-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.cell-body {
+  font-size: 12px; line-height: 1.55; color: #334155;
+}
+.cell-body strong { color: #0F172A; }
+
+.badge {
+  font-size: 10px; font-weight: 700;
+  padding: 3px 8px; border-radius: 999px;
+  display: inline-block; width: fit-content;
+  letter-spacing: 0.03em;
+}
+
+/* Bordas e badges por algoritmo */
+.row-km  .cell { border-left: 3px solid #3B82F6; }
+.row-ahc .cell { border-left: 3px solid #10B981; }
+.row-gmm .cell { border-left: 3px solid #F59E0B; }
+.row-opc .cell { border-left: 3px solid #8B5CF6; }
+
+.bkm  { background: #DBEAFE; color: #1E40AF; }
+.bahc { background: #D1FAE5; color: #065F46; }
+.bgmm { background: #FEF3C7; color: #92400E; }
+.bopc { background: #EDE9FE; color: #5B21B6; }
+
+/* ── Célula de resultado com mini-SVG ────────────────────── */
+.result-cell {
+  background: #F8FAFC;
+  border: 1.5px dashed #CBD5E1;
+}
+
+/* ── Linha de separação de grupo ─────────────────────────── */
+.row-gap { height: 6px; }
+
+/* ── Legenda / rodapé ─────────────────────────────────────── */
+.footer {
+  margin-top: 24px;
+  display: flex; gap: 24px; flex-wrap: wrap;
+  align-items: center;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: #475569;
+}
+.legend-swatch {
+  width: 14px; height: 14px; border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Setas entre etapas (SVG no header) ─────────────────── */
+.steps-row {
+  display: grid;
+  grid-template-columns: 148px repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="page-title">Comparação de Algoritmos de Clusterização</div>
+  <div class="page-sub">Como cada método atua em cada etapa — da inicialização ao resultado final</div>
+</div>
+
+<div class="grid">
+
+  <!-- ── Cabeçalho das etapas ─────────────────────────── -->
+  <div class="corner"></div>
+
+  <div class="step-head">
+    <div class="step-num">1</div>
+    <div class="step-name">Inicialização</div>
+    <div class="step-desc">Como o algoritmo começa</div>
+  </div>
+  <div class="step-head">
+    <div class="step-num">2</div>
+    <div class="step-name">Atribuição</div>
+    <div class="step-desc">Como pontos são associados a clusters</div>
+  </div>
+  <div class="step-head">
+    <div class="step-num">3</div>
+    <div class="step-name">Refinamento</div>
+    <div class="step-desc">Como o modelo melhora</div>
+  </div>
+  <div class="step-head">
+    <div class="step-num">4</div>
+    <div class="step-name">Convergência</div>
+    <div class="step-desc">Quando e como para</div>
+  </div>
+  <div class="step-head">
+    <div class="step-num">5</div>
+    <div class="step-name">Resultado</div>
+    <div class="step-desc">O que o algoritmo entrega</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- K-MEANS                                           -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="algo-name km-bg">
+    <div class="algo-label">K-Means</div>
+    <div class="algo-tag">Centróide<br>Baseado em distância</div>
+  </div>
+
+  <!-- 1. Init -->
+  <div class="cell row-km">
+    <div class="cell-icon">🎯</div>
+    <div class="cell-body">
+      Sorteia <strong>k centróides</strong> aleatoriamente no espaço dos dados.
+      Resultado sensível à semente inicial — múltiplos restarts com <em>k-means++</em> mitigam isso.
+    </div>
+    <span class="badge bkm">Requer k fixo a priori</span>
+  </div>
+
+  <!-- 2. Atribuição -->
+  <div class="cell row-km">
+    <div class="cell-icon">📏</div>
+    <div class="cell-body">
+      Cada ponto é atribuído ao centróide de <strong>menor distância euclidiana</strong>.
+      Atribuição <em>rígida</em> (hard assignment): um ponto pertence a exatamente um cluster.
+    </div>
+  </div>
+
+  <!-- 3. Refinamento -->
+  <div class="cell row-km">
+    <div class="cell-icon">🔄</div>
+    <div class="cell-body">
+      <strong>Recalcula cada centróide</strong> como a média aritmética dos pontos atribuídos a ele.
+      Retorna ao passo 2. Cada iteração diminui monotonicamente a inércia total.
+    </div>
+  </div>
+
+  <!-- 4. Convergência -->
+  <div class="cell row-km">
+    <div class="cell-icon">✅</div>
+    <div class="cell-body">
+      Para quando os centróides <strong>não se movem</strong> entre iterações
+      (deslocamento &lt; tolerância). Convergência garantida para um mínimo local da inércia.
+    </div>
+    <span class="badge bkm">Convergência garantida</span>
+  </div>
+
+  <!-- 5. Resultado -->
+  <div class="cell row-km result-cell">
+    <svg width="80" height="54" viewBox="0 0 80 54">
+      <!-- Cluster 1 (azul) -->
+      <circle cx="20" cy="27" r="14" fill="#DBEAFE" stroke="#3B82F6" stroke-width="1.5"/>
+      <!-- Cluster 2 (azul mais escuro) -->
+      <circle cx="60" cy="27" r="14" fill="#BFDBFE" stroke="#2563EB" stroke-width="1.5"/>
+      <!-- Centróide 1 -->
+      <line x1="17" y1="27" x2="23" y2="27" stroke="#1D4ED8" stroke-width="2"/>
+      <line x1="20" y1="24" x2="20" y2="30" stroke="#1D4ED8" stroke-width="2"/>
+      <!-- Centróide 2 -->
+      <line x1="57" y1="27" x2="63" y2="27" stroke="#1D4ED8" stroke-width="2"/>
+      <line x1="60" y1="24" x2="60" y2="30" stroke="#1D4ED8" stroke-width="2"/>
+      <!-- Fronteira de Voronoi -->
+      <line x1="40" y1="0" x2="40" y2="54" stroke="#94A3B8" stroke-width="1" stroke-dasharray="4 3"/>
+    </svg>
+    <div class="cell-body">
+      <strong>k clusters esféricos</strong> com fronteiras de Voronoi.
+      Todo ponto tem cluster; sem ruído. Falha em geometrias não convexas (luas, círculos).
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- AHC                                               -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="algo-name ahc-bg">
+    <div class="algo-label">AHC</div>
+    <div class="algo-tag">Hierárquico · Ward<br>Fusão bottom-up</div>
+  </div>
+
+  <!-- 1. Init -->
+  <div class="cell row-ahc">
+    <div class="cell-icon">🔵</div>
+    <div class="cell-body">
+      Cada um dos <strong>n pontos começa como seu próprio cluster</strong>.
+      Nenhum parâmetro aleatório — o estado inicial é determinístico e único.
+    </div>
+    <span class="badge bahc">Sem inicialização aleatória</span>
+  </div>
+
+  <!-- 2. Atribuição -->
+  <div class="cell row-ahc">
+    <div class="cell-icon">📐</div>
+    <div class="cell-body">
+      Calcula a distância entre <strong>todos os pares de clusters</strong>.
+      Com linkage Ward, a distância mede o aumento de variância intra-cluster ao fundir dois grupos.
+    </div>
+  </div>
+
+  <!-- 3. Refinamento -->
+  <div class="cell row-ahc">
+    <div class="cell-icon">🔗</div>
+    <div class="cell-body">
+      <strong>Funde os dois clusters mais próximos</strong>.
+      Atualiza a matriz de distâncias para o novo cluster fundido e repete.
+      Fusão é <em>irreversível</em> — não há retorno ao estado anterior.
+    </div>
+  </div>
+
+  <!-- 4. Convergência -->
+  <div class="cell row-ahc">
+    <div class="cell-icon">✅</div>
+    <div class="cell-body">
+      Para ao atingir <strong>k clusters</strong> (corte horizontal do dendrograma).
+      k pode ser escolhido após a execução — não precisa ser definido antes.
+    </div>
+    <span class="badge bahc">Determinístico · O(n² log n)</span>
+  </div>
+
+  <!-- 5. Resultado -->
+  <div class="cell row-ahc result-cell">
+    <svg width="80" height="54" viewBox="0 0 80 54">
+      <!-- Dendrograma simplificado -->
+      <!-- Folhas -->
+      <circle cx="10" cy="48" r="3" fill="#10B981"/>
+      <circle cx="22" cy="48" r="3" fill="#10B981"/>
+      <circle cx="38" cy="48" r="3" fill="#10B981"/>
+      <circle cx="54" cy="48" r="3" fill="#10B981"/>
+      <circle cx="66" cy="48" r="3" fill="#10B981"/>
+      <circle cx="74" cy="48" r="3" fill="#10B981"/>
+      <!-- Ramo 1: 10+22 → nó em 16, altura 34 -->
+      <line x1="10" y1="48" x2="10" y2="34" stroke="#10B981" stroke-width="1.5"/>
+      <line x1="22" y1="48" x2="22" y2="34" stroke="#10B981" stroke-width="1.5"/>
+      <line x1="10" y1="34" x2="22" y2="34" stroke="#10B981" stroke-width="1.5"/>
+      <!-- Ramo 2: 38 sozinho → 38, altura 28 -->
+      <line x1="38" y1="48" x2="38" y2="28" stroke="#10B981" stroke-width="1.5"/>
+      <!-- Junção ramo1 + ramo2 → nó em 28, altura 20 -->
+      <line x1="16" y1="34" x2="16" y2="20" stroke="#10B981" stroke-width="1.5"/>
+      <line x1="16" y1="20" x2="38" y2="20" stroke="#10B981" stroke-width="1.5"/>
+      <line x1="38" y1="28" x2="38" y2="20" stroke="#10B981" stroke-width="1.5"/>
+      <!-- Ramo 3: 54+66 → nó em 60, altura 34 -->
+      <line x1="54" y1="48" x2="54" y2="34" stroke="#047857" stroke-width="1.5"/>
+      <line x1="66" y1="48" x2="66" y2="34" stroke="#047857" stroke-width="1.5"/>
+      <line x1="54" y1="34" x2="66" y2="34" stroke="#047857" stroke-width="1.5"/>
+      <!-- 74 → 74, altura 28 -->
+      <line x1="74" y1="48" x2="74" y2="28" stroke="#047857" stroke-width="1.5"/>
+      <!-- Junção ramo3 + 74 → 67, altura 20 -->
+      <line x1="60" y1="34" x2="60" y2="20" stroke="#047857" stroke-width="1.5"/>
+      <line x1="60" y1="20" x2="74" y2="20" stroke="#047857" stroke-width="1.5"/>
+      <line x1="74" y1="28" x2="74" y2="20" stroke="#047857" stroke-width="1.5"/>
+      <!-- Corte em k=2 -->
+      <line x1="0" y1="12" x2="80" y2="12" stroke="#94A3B8" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="1" y="10" font-size="8" fill="#94A3B8">corte k=2</text>
+    </svg>
+    <div class="cell-body">
+      <strong>Dendrograma</strong> cortado em k. Funciona bem com qualquer formato de cluster;
+      sensível a outliers e O(n²) em memória.
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- GMM                                               -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="algo-name gmm-bg">
+    <div class="algo-label">GMM</div>
+    <div class="algo-tag">Probabilístico · EM<br>Atribuição suave</div>
+  </div>
+
+  <!-- 1. Init -->
+  <div class="cell row-gmm">
+    <div class="cell-icon">📊</div>
+    <div class="cell-body">
+      Inicializa <strong>k gaussianas</strong> com parâmetros (μ, Σ, π).
+      Tipicamente usa K-Means para a inicialização de μ, acelerando convergência.
+    </div>
+    <span class="badge bgmm">Requer k fixo a priori</span>
+  </div>
+
+  <!-- 2. Atribuição -->
+  <div class="cell row-gmm">
+    <div class="cell-icon">🎲</div>
+    <div class="cell-body">
+      <strong>E-step:</strong> calcula a probabilidade posterior de cada ponto pertencer a cada componente
+      gaussiana — atribuição <em>soft</em> (valores contínuos em [0, 1]).
+    </div>
+  </div>
+
+  <!-- 3. Refinamento -->
+  <div class="cell row-gmm">
+    <div class="cell-icon">📈</div>
+    <div class="cell-body">
+      <strong>M-step:</strong> atualiza μ, Σ e π de cada gaussiana maximizando a
+      log-verossimilhança ponderada pelas probabilidades do E-step. Repete até convergência.
+    </div>
+  </div>
+
+  <!-- 4. Convergência -->
+  <div class="cell row-gmm">
+    <div class="cell-icon">✅</div>
+    <div class="cell-body">
+      Para quando a <strong>log-verossimilhança converge</strong> entre iterações.
+      Pode ser lento ou oscilar em dados esparsos ou de alta dimensão.
+    </div>
+    <span class="badge bgmm">DP alto no tempo de execução</span>
+  </div>
+
+  <!-- 5. Resultado -->
+  <div class="cell row-gmm result-cell">
+    <svg width="80" height="54" viewBox="0 0 80 54">
+      <!-- Elipse 1 (inclinada) -->
+      <ellipse cx="24" cy="28" rx="18" ry="10" transform="rotate(-20 24 28)"
+               fill="rgba(251,191,36,0.22)" stroke="#F59E0B" stroke-width="1.5"/>
+      <!-- Elipse 2 -->
+      <ellipse cx="58" cy="28" rx="16" ry="11" transform="rotate(15 58 28)"
+               fill="rgba(217,119,6,0.18)" stroke="#B45309" stroke-width="1.5"/>
+      <!-- Sobreposição indicada -->
+      <text x="36" y="30" font-size="9" fill="#92400E" font-weight="700">∩</text>
+      <!-- Ponto com probabilidade -->
+      <circle cx="41" cy="28" r="3.5" fill="#F59E0B" opacity="0.7"/>
+      <text x="42" y="20" font-size="8" fill="#92400E">0.6 / 0.4</text>
+    </svg>
+    <div class="cell-body">
+      <strong>k clusters elípticos</strong> com probabilidades de pertencimento.
+      Aceita sobreposição entre clusters. A covariância Σ captura orientação e escala.
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- OPTICS                                            -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div class="algo-name opc-bg">
+    <div class="algo-label">OPTICS</div>
+    <div class="algo-tag">Densidade<br>k não requerido</div>
+  </div>
+
+  <!-- 1. Init -->
+  <div class="cell row-opc">
+    <div class="cell-icon">⚙️</div>
+    <div class="cell-body">
+      Define <strong>epsilon</strong> (raio máximo de busca) e <strong>minPts</strong>
+      (densidade mínima para ser core point). Não requer o número de clusters antecipadamente.
+    </div>
+    <span class="badge bopc">k emerge dos dados</span>
+  </div>
+
+  <!-- 2. Atribuição -->
+  <div class="cell row-opc">
+    <div class="cell-icon">🔍</div>
+    <div class="cell-body">
+      Para cada ponto, calcula a <strong>reachability-distance</strong> em relação a todos os
+      vizinhos no raio epsilon — quantifica a acessibilidade por densidade local,
+      não apenas distância euclidiana pura.
+    </div>
+  </div>
+
+  <!-- 3. Refinamento -->
+  <div class="cell row-opc">
+    <div class="cell-icon">📉</div>
+    <div class="cell-body">
+      <strong>Ordena todos os pontos</strong> pela reachability crescente, construindo o
+      <em>reachability plot</em>. Vales no gráfico correspondem a clusters densos;
+      picos marcam fronteiras entre clusters ou regiões de ruído.
+    </div>
+  </div>
+
+  <!-- 4. Convergência -->
+  <div class="cell row-opc">
+    <div class="cell-icon">✅</div>
+    <div class="cell-body">
+      Termina após <strong>visitar todos os pontos exatamente uma vez</strong>. Sem iteração.
+      Clusters são extraídos do reachability plot via corte por xi ou epsilon.
+    </div>
+    <span class="badge bopc">O(n²) — sem iteração</span>
+  </div>
+
+  <!-- 5. Resultado -->
+  <div class="cell row-opc result-cell">
+    <svg width="80" height="54" viewBox="0 0 80 54">
+      <!-- Reachability plot simplificado -->
+      <rect x="0" y="36" width="80" height="18" fill="#F1F5F9"/>
+      <!-- Barras do reachability plot -->
+      <rect x="2"  y="42" width="5" height="12" fill="#8B5CF6" rx="1"/>
+      <rect x="8"  y="40" width="5" height="14" fill="#8B5CF6" rx="1"/>
+      <rect x="14" y="44" width="5" height="10" fill="#8B5CF6" rx="1"/>
+      <rect x="20" y="45" width="5" height="9"  fill="#8B5CF6" rx="1"/>
+      <!-- Vale 1 (cluster 1) -->
+      <rect x="26" y="48" width="5" height="6"  fill="#6D28D9" rx="1"/>
+      <rect x="32" y="47" width="5" height="7"  fill="#6D28D9" rx="1"/>
+      <!-- Pico (fronteira) -->
+      <rect x="38" y="38" width="5" height="16" fill="#C4B5FD" rx="1"/>
+      <!-- Vale 2 (cluster 2) -->
+      <rect x="44" y="48" width="5" height="6"  fill="#6D28D9" rx="1"/>
+      <rect x="50" y="47" width="5" height="7"  fill="#6D28D9" rx="1"/>
+      <rect x="56" y="48" width="5" height="6"  fill="#6D28D9" rx="1"/>
+      <!-- Ruído -->
+      <rect x="62" y="36" width="5" height="18" fill="#E2E8F0" rx="1"/>
+      <rect x="68" y="37" width="5" height="17" fill="#E2E8F0" rx="1"/>
+      <rect x="74" y="37" width="5" height="17" fill="#E2E8F0" rx="1"/>
+      <!-- Clusters acima -->
+      <ellipse cx="16" cy="22" rx="12" ry="8" fill="rgba(139,92,246,0.18)" stroke="#8B5CF6" stroke-width="1.2"/>
+      <ellipse cx="50" cy="20" rx="14" ry="9" fill="rgba(109,40,217,0.18)" stroke="#6D28D9" stroke-width="1.2"/>
+      <!-- Pontos de ruído -->
+      <circle cx="64" cy="20" r="2.5" fill="none" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="2 1"/>
+      <circle cx="72" cy="16" r="2.5" fill="none" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="2 1"/>
+    </svg>
+    <div class="cell-body">
+      <strong>k variável</strong>; detecta clusters de forma arbitrária; identifica
+      ruído explicitamente (label = 0). Alta variância de ARI — sensível à estrutura
+      de densidade de cada dataset.
+    </div>
+  </div>
+
+</div><!-- /grid -->
+
+<!-- ── Rodapé comparativo ───────────────────────────────── -->
+<div style="margin-top: 28px; background: #fff; border-radius: 10px; border: 1px solid #E2E8F0; padding: 18px 20px;">
+  <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em; color: #64748B; margin-bottom: 14px;">Resumo comparativo</div>
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+
+    <div style="border-left: 3px solid #3B82F6; padding-left: 12px;">
+      <div style="font-size: 13px; font-weight: 700; color: #1D4ED8;">K-Means</div>
+      <div style="font-size: 11px; color: #475569; margin-top: 5px; line-height: 1.5;">
+        ✔ Rápido, escalável<br>
+        ✔ Convergência garantida<br>
+        ✘ Assume clusters esféricos<br>
+        ✘ Sensível a outliers e à init<br>
+        ✘ Falha em Moons / Circles
+      </div>
+    </div>
+
+    <div style="border-left: 3px solid #10B981; padding-left: 12px;">
+      <div style="font-size: 13px; font-weight: 700; color: #065F46;">AHC</div>
+      <div style="font-size: 11px; color: #475569; margin-top: 5px; line-height: 1.5;">
+        ✔ Determinístico, sem init aleatória<br>
+        ✔ k pode ser escolhido a posteriori<br>
+        ✔ Ward funciona bem em blobs<br>
+        ✘ O(n²) em memória<br>
+        ✘ Fusões irreversíveis
+      </div>
+    </div>
+
+    <div style="border-left: 3px solid #F59E0B; padding-left: 12px;">
+      <div style="font-size: 13px; font-weight: 700; color: #B45309;">GMM</div>
+      <div style="font-size: 11px; color: #475569; margin-top: 5px; line-height: 1.5;">
+        ✔ Atribuição probabilística (soft)<br>
+        ✔ Clusters elípticos com Σ livre<br>
+        ✔ Modelo gerativo<br>
+        ✘ Tempo e variância altos (EM)<br>
+        ✘ Falha em alta dimensão (Σ singular)
+      </div>
+    </div>
+
+    <div style="border-left: 3px solid #8B5CF6; padding-left: 12px;">
+      <div style="font-size: 13px; font-weight: 700; color: #6D28D9;">OPTICS</div>
+      <div style="font-size: 11px; color: #475569; margin-top: 5px; line-height: 1.5;">
+        ✔ k não precisa ser especificado<br>
+        ✔ Detecta ruído explicitamente<br>
+        ✔ Qualquer forma de cluster<br>
+        ✘ Alta variância de ARI<br>
+        ✘ Sensível à densidade local
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div style="margin-top: 14px; font-size: 11px; color: #94A3B8; text-align: right;">
+  Monografia — Rafael Arocho · UFMG Estatística 2026
+</div>
+
+</body>
+</html>
