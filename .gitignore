@@ -14,8 +14,13 @@ renv/staging/
 *_files/
 .quarto/
 
-# Outputs renderizados (manter só o do commit principal, se desejar)
-# *.html
+# Outputs renderizados (HTML gerado pelo Quarto)
+*.html
+
+# Arquivos temporários de trabalho
+pdf_pages/
+main.tex
+monografia-*.pdf
 
 # macOS
 .DS_Store

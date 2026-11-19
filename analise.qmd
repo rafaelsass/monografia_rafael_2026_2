@@ -986,7 +986,7 @@ Os dados são lidos a partir de seus respectivos arquivos `.data` disponíveis e
 #| label: load-dados-reais
 
 carregar_dados_reais <- function() {
-  base_path <- "31386421/Real_data/"
+  base_path <- "dados/reais/"
   
   # 1. Iris (150 obs, 4 features, 3 classes)
   iris_raw <- read.csv(file.path(base_path, "iris/iris.data"), header = FALSE)
