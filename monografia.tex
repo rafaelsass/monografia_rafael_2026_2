@@ -1,7 +1,7 @@
 \documentclass[12pt,a4paper]{report}
 
 % ── Codificação e idioma ──────────────────────────────────────────────────────
-\usepackage[brazil]{babel}
+\usepackage[brazilian]{babel}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 
@@ -22,9 +22,9 @@
 % ── Figuras ───────────────────────────────────────────────────────────────────
 \usepackage{graphicx}
 \usepackage{float}
-\usepackage{pdflscape}
+\usepackage{lscape}
 
-% ── Formato de capítulo: "1  Título" (sem a palavra "Capítulo") ───────────────
+
 \usepackage{titlesec}
 \titleformat{\chapter}[block]
   {\normalfont\Large\bfseries}{\thechapter}{1em}{}
@@ -94,7 +94,6 @@
 \chapter*{Agradecimentos}
 \addcontentsline{toc}{chapter}{Agradecimentos}
 
-[Texto de agradecimentos]
 
 \newpage
 
@@ -142,7 +141,7 @@ discriminativo.
 \section{A Maldição da Dimensionalidade}
 % ─────────────────────────────────────────────────────────────────────────────
 
-Seja $x_1, \ldots, x_n$ vetores aleatórios de dimensão $d$. Então, a
+Seja $x_1, \ldots, x_n$ uma coleção de vetores aleatórios de dimensão $d$. Então, a
 distância quadrática entre duas observações $x_i$ e $x_j$
 ($i, j = 1, \ldots, n$) é:
 %
@@ -152,8 +151,8 @@ distância quadrática entre duas observações $x_i$ e $x_j$
 
 Suponha agora que $x_1, \ldots, x_n \overset{iid}{\sim} \mathcal{N}(0, I_d)$,
 onde $I_d$ denota a matriz identidade de ordem $d$. Então cada parcela
-$(x_{ik} - x_{jk})^2$ segue distribuição $\chi^2(1)$. Dessa forma, pela
-\textbf{Lei dos Grandes Números}:
+$(x_{ik} - x_{jk})^2$ segue distribuição $2\chi^2(1)$, de modo que
+$d_{ij}^2 \sim 2\chi^2(d)$. Dessa forma, pela \textbf{Lei dos Grandes Números}:
 %
 \begin{equation}
   \frac{d_{ij}^2}{d} \xrightarrow{\;a.s.\;} \mathbb{E}[(x_{ik} - x_{jk})^2]
@@ -162,19 +161,22 @@ $(x_{ik} - x_{jk})^2$ segue distribuição $\chi^2(1)$. Dessa forma, pela
 
 portanto $d_{ij} \approx \sqrt{2d}$ para todo par de pontos.
 
-O \textbf{coeficiente de variação} das distâncias é:
+\newpage
+
+O \textbf{coeficiente de variação} das distâncias, obtido via método delta para
+$d_{ij} = \sqrt{d_{ij}^2}$, é:
 %
 \begin{equation}
   \text{CV}[d_{ij}] = \frac{\text{SD}[d_{ij}]}{\mathbb{E}[d_{ij}]}
-  \;\sim\; \frac{1}{\sqrt{d}} \;\xrightarrow{d \to \infty}\; 0,
+  \;\sim\; \frac{1}{\sqrt{2d}} \;\xrightarrow{d \to \infty}\; 0,
 \end{equation}
 
 de onde vem que todas as distâncias concentram-se em torno de $\sqrt{2d}$.
 Com $d = 500$, por exemplo, a variação relativa é aproximadamente 3\%, de
 modo que pontos ``próximos'' e ``distantes'' tornam-se ``igualmente
 distantes'', e a noção de vizinhança colapsa. A Tabela~\ref{tab:cv}
-compara o CV empírico com o valor teórico $1/\sqrt{d}$, em uma simulação
-com $n = 500$.
+compara o CV empírico com o valor teórico $1/\sqrt{2d}$, em uma simulação
+com 400 pontos d-dimensionais.
 
 \begin{table}[ht]
   \centering
@@ -182,13 +184,13 @@ com $n = 500$.
   \label{tab:cv}
   \begin{tabular}{rcc}
     \toprule
-    $d$ & $\text{CV}[d_{ij}]$ empírico & $1/\sqrt{d}$ teórico \\
+    $d$ & $\text{CV}[d_{ij}]$ empírico & $1/\sqrt{2d}$ teórico \\
     \midrule
-      2 & 0{,}4472 & 0{,}7071 \\
-     10 & 0{,}2094 & 0{,}3162 \\
-     50 & 0{,}0993 & 0{,}1414 \\
-    100 & 0{,}0702 & 0{,}1000 \\
-    500 & 0{,}0314 & 0{,}0447 \\
+      2 & 0{,}4472 & 0{,}5000 \\
+     10 & 0{,}2094 & 0{,}2236 \\
+     50 & 0{,}0993 & 0{,}1000 \\
+    100 & 0{,}0702 & 0{,}0707 \\
+    500 & 0{,}0314 & 0{,}0316 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -220,23 +222,25 @@ e recomendações práticas.
 \section{Métodos de Redução e Algoritmos de Clusterização}
 % ─────────────────────────────────────────────────────────────────────────────
 
-O \textbf{PCA} (\textit{Principal Component Analysis}) é um método linear
-que projeta os dados nas direções de maior variância. O \textbf{Kernel PCA}
-estende o PCA ao espaço de características induzido por um kernel RBF,
-capturando relações não-lineares. O \textbf{Isomap} preserva distâncias
-geodésicas ao longo da variedade dos dados. O \textbf{MDS}
-(\textit{Multidimensional Scaling}) por coordenadas clássicas é
-algebricamente equivalente ao PCA em dados euclidianos. O \textbf{UMAP}
-(\textit{Uniform Manifold Approximation and Projection};
-\citealt{mcinnes2018}) é um método de aprendizado de variedade que preserva
-estrutura local e global dos dados.
+O \textbf{PCA} (\textit{Principal Component Analysis}; \citealt{pearson1901})
+é um método linear que projeta os dados nas direções de maior variância. O
+\textbf{Kernel PCA} \citep{scholkopf1998} estende o PCA ao espaço de
+características induzido por um kernel RBF, capturando relações não-lineares. O
+\textbf{Isomap} \citep{tenenbaum2000} preserva distâncias geodésicas ao longo
+da variedade dos dados. O \textbf{MDS} (\textit{Multidimensional Scaling};
+\citealt{torgerson1952}) por coordenadas clássicas é algebricamente equivalente
+ao PCA em dados euclidianos. O \textbf{UMAP} (\textit{Uniform Manifold
+Approximation and Projection}; \citealt{mcinnes2018}) é um método de
+aprendizado de variedade que preserva estrutura local e global dos dados.
 
-Do lado da clusterização, o \textbf{K-Means} particiona os dados
-minimizando a inércia intra-cluster; o \textbf{AHC} (\textit{Agglomerative
-Hierarchical Clustering}) constrói uma hierarquia por fusões sucessivas com
-critério de Ward; o \textbf{GMM} (\textit{Gaussian Mixture Model}) ajusta
-uma mistura de gaussianas via algoritmo EM; e o \textbf{OPTICS} detecta
-clusters de densidade variável sem exigir o número de clusters como entrada.
+Do lado da clusterização, o \textbf{K-Means} \citep{macqueen1967} particiona os
+dados minimizando a inércia intra-cluster; o \textbf{AHC}
+(\textit{Agglomerative Hierarchical Clustering}) constrói uma hierarquia por
+fusões sucessivas com critério de Ward \citep{ward1963}; o \textbf{GMM}
+(\textit{Gaussian Mixture Model}) ajusta uma mistura de gaussianas via
+algoritmo EM \citep{dempster1977}; e o \textbf{OPTICS} \citep{ankerst1999}
+detecta clusters de densidade variável sem exigir o número de clusters como
+entrada.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Métrica de Avaliação: ARI}
@@ -271,10 +275,8 @@ $U$ e $V$.
 \label{chap:experimento}
 % ============================================================================
 
-O experimento replica a metodologia de \citet{amate2026} avaliando cinco
-métodos de redução de dimensionalidade combinados com quatro algoritmos de
-clusterização, em três níveis de compressão, sobre quatro tipos de dados
-sintéticos em 50 dimensões.
+Aqui realizaremos uma reprodução controlada da metodologia de \citet{amate2026} avaliando cinco métodos de redução de dimensionalidade (PCA, Kernel PCA, Isomap, MDS, UMAP) combinados com quatro algoritmos de
+clusterização (K-Means, AHC, GMM, OPTICS), em três níveis de redução (k-1, 25\%, 50\%), sobre quatro tipos de dados sintéticos de 50 dimensões.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Pipeline Experimental}
@@ -293,7 +295,7 @@ Tabela~\ref{tab:niveis} descreve os níveis de redução testados.
     \toprule
     Nível        & Dimensões ($d=50$) & Racional \\
     \midrule
-    $k - 1$      & 1  & Limite teórico de \citet{ding2004}: \textit{subspace bound} para K-Means \\
+    $k - 1$      & 1  & Limite teórico de \citet{ding2004}\\
     25\% de $d$  & 12 & Literatura de clustering textual \\
     50\% de $d$  & 25 & Prática comum com PCA aplicado \\
     \bottomrule
@@ -346,7 +348,7 @@ utilizados.
 Quatro tipos de dados sintéticos foram projetados em 50 dimensões via
 projeção gaussiana aleatória, replicando as famílias do artigo original:
 
-\begin{itemize}
+\begin{enumerate}
   \item \textbf{Moons} ($n = 400$, $d = 50$, $k = 2$): variedade curvilínea
         em forma de duas luas.
   \item \textbf{Circles} ($n = 400$, $d = 50$, $k = 2$): dois círculos
@@ -355,19 +357,23 @@ projeção gaussiana aleatória, replicando as famílias do artigo original:
         gaussianos esféricos.
   \item \textbf{Gaussiano-5k} ($n = 300$, $d = 50$, $k = 5$): cinco clusters
         gaussianos esféricos.
-\end{itemize}
+\end{enumerate}
+
+Nos conjuntos \textit{Moons} e \textit{Circles}, a estrutura original reside em
+$d = 2$ dimensões; as demais dimensões até $d = 50$ correspondem a ruído
+gaussiano introduzido pela projeção aleatória. De forma análoga, nos conjuntos
+gaussianos a separabilidade entre os $k$ grupos ocorre em um subespaço de
+dimensão $k - 1$, sendo as dimensões excedentes ruído puro.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Execução dos Experimentos}
+\section{Execução do Experimento}
 % ─────────────────────────────────────────────────────────────────────────────
 
 O experimento avalia todas as combinações de 16 variantes de redução (sem
 redução mais 5 métodos $\times$ 3 níveis), 4 algoritmos de clusterização, 4
-\textit{datasets} e 1000 repetições com sementes distintas, totalizando:
+\textit{datasets} e 1000 repetições com sementes aleatórias distintas, totalizando 256{.}000 execuções.
 %
-\begin{equation}
-  16 \times 4 \times 4 \times 1000 = 256{.}000 \text{ execuções de clusterização.}
-\end{equation}
+
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Projeção em 2D por Método de Redução}
@@ -395,36 +401,47 @@ distribuição do ARI (1000 réplicas) para cada combinação de método de redu
 e nível, separada por \textit{dataset} e algoritmo de clusterização.
 
 \clearpage
+{\pdfpageattr{/Rotate 90}%
+\begin{landscape}
+\vspace*{\fill}
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\textwidth]{figuras/boxplot_kmeans.pdf}
+  \includegraphics[width=\linewidth,height=0.85\textwidth,keepaspectratio]{figuras/boxplot_kmeans.pdf}
   \caption{Distribuição do ARI por método de redução --- K-Means.}
   \label{fig:bp_kmeans}
 \end{figure}
-
+\vspace*{\fill}
 \clearpage
+
+\vspace*{\fill}
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\textwidth]{figuras/boxplot_ahc.pdf}
+  \includegraphics[width=\linewidth,height=0.85\textwidth,keepaspectratio]{figuras/boxplot_ahc.pdf}
   \caption{Distribuição do ARI por método de redução --- AHC.}
   \label{fig:bp_ahc}
 \end{figure}
-
+\vspace*{\fill}
 \clearpage
+
+\vspace*{\fill}
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\textwidth]{figuras/boxplot_optics.pdf}
+  \includegraphics[width=\linewidth,height=0.85\textwidth,keepaspectratio]{figuras/boxplot_optics.pdf}
   \caption{Distribuição do ARI por método de redução --- OPTICS.}
   \label{fig:bp_optics}
 \end{figure}
-
+\vspace*{\fill}
 \clearpage
+
+\vspace*{\fill}
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\textwidth]{figuras/boxplot_gmm.pdf}
+  \includegraphics[width=\linewidth,height=0.85\textwidth,keepaspectratio]{figuras/boxplot_gmm.pdf}
   \caption{Distribuição do ARI por método de redução --- GMM.}
   \label{fig:bp_gmm}
 \end{figure}
+\vspace*{\fill}
+\end{landscape}}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Análise Agregada}
@@ -442,7 +459,7 @@ portanto sua WR não é calculada.
   \centering
   \caption{Taxa de vitória (WR\%) e ganho médio de ARI ($\Delta$ARI) por
     método de redução e algoritmo de clusterização (1000 réplicas, todos os
-    \textit{datasets} e níveis). OPTICS excluído da comparação por não ter
+    \textit{datasets} e níveis). O OPTICS foi excluído da comparação por não ter
     \textit{baseline} em alta dimensão.}
   \label{tab:winrate}
   \begin{tabular}{lcccc}
@@ -464,7 +481,13 @@ portanto sua WR não é calculada.
 A Figura~\ref{fig:heatmap_ari} consolida o ARI médio por método de redução
 e algoritmo de clusterização. A Figura~\ref{fig:niveis} investiga se o nível
 de compressão ($k-1$, 25\%, 50\%) impacta o ARI de forma consistente entre
-algoritmos e \textit{datasets}.
+algoritmos e \textit{datasets}. Observa-se que o K-Means e o AHC mantêm
+desempenho relativamente estável ao longo dos três níveis (com leve queda do
+AHC em 50\%), enquanto o GMM e o OPTICS sofrem redução expressiva de ARI médio
+ao passar para o nível de 50\% ($d = 25$). Esse comportamento indica que reter
+dimensões espúrias prejudica sobretudo algoritmos sensíveis à estimação de
+covariância ou à densidade local, ao passo que a compressão mais agressiva
+($k - 1$) preserva o sinal discriminativo e resulta em maior ARI médio global.
 
 \begin{figure}[H]
   \centering
@@ -485,11 +508,11 @@ algoritmos e \textit{datasets}.
 \section{Custo Computacional}
 % ─────────────────────────────────────────────────────────────────────────────
 
-Cada chamada de DR e de clusterização foi cronometrada individualmente com
-\texttt{proc.time()}, permitindo calcular o tempo real acumulado de cada
-combinação diretamente a partir das medições. O custo atribuído a cada par
-(DR, algoritmo) divide o tempo de redução entre os 4 algoritmos que
-consomem a mesma projeção:
+Cada chamada de redução de dimensionalidade (DR) e de clusterização foi
+cronometrada individualmente com \texttt{proc.time()}, permitindo calcular o
+tempo real acumulado de cada combinação diretamente a partir das medições. O
+custo atribuído a cada par (DR, algoritmo) soma a razão do tempo de redução
+pelos 4 algoritmos que utilizam a mesma projeção ao tempo da clusterização:
 %
 \begin{equation}
   \text{Custo atribuído} = \frac{t_{\text{DR}}}{4} + t_{\text{clustering}}.
@@ -502,9 +525,10 @@ experimento --- mais de doze vezes o custo do Isomap.
 
 \begin{table}[ht]
   \centering
-  \caption{Tempo medido por método de redução (1000 réplicas, execução
-    paralela). Cada aplicação de DR é contada uma vez (sem duplicação pelo
-    número de algoritmos).}
+  \caption{Tempo medido por método de redução (12\,000 chamadas por método:
+    3 níveis $\times$ 4 bases $\times$ 1000 réplicas, execução paralela).
+    Cada aplicação de DR é contada uma vez (sem duplicação pelo número de
+    algoritmos).}
   \label{tab:tempo_dr}
   \begin{tabular}{lrrr}
     \toprule
@@ -587,40 +611,45 @@ A Tabela~\ref{tab:reais} contém as características básicas dos seis
 
 Utilizamos o PCA (projeção linear) e o UMAP (projeção \textit{manifold}
 não-linear) para inspecionar visualmente a separabilidade das classes antes
-da clusterização.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Estrutura dos Dados Reais}
-% ─────────────────────────────────────────────────────────────────────────────
+da clusterização. A Figura~\ref{fig:reais_vis} apresenta as projeções em 2D
+dos seis \textit{datasets} reais, ordenados por dimensionalidade crescente.
 
 \clearpage
+{\pdfpageattr{/Rotate 90}%
+\begin{landscape}
+\vspace*{\fill}
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\textwidth]{figuras/vis_reais_2d.pdf}
+  \includegraphics[width=\linewidth,height=0.82\textwidth,keepaspectratio]{figuras/vis_reais_2d.pdf}
   \caption{Projeção em 2D dos seis \textit{datasets} reais (PCA e UMAP). A
     cor representa o rótulo real da classe.}
   \label{fig:reais_vis}
 \end{figure}
+\vspace*{\fill}
+\end{landscape}}
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Resultados com Dados Reais}
+\section{Resultados}
 % ─────────────────────────────────────────────────────────────────────────────
 
-A Figura~\ref{fig:heatmap_reais} apresenta o ARI por método de redução e
-algoritmo de clusterização, facetado por \textit{dataset}. Os
-\textit{datasets} estão ordenados por dimensionalidade crescente ($d = 4$ a
-$d = 90$). O melhor nível de redução foi selecionado por combinação.
+A Figura~\ref{fig:heatmap_reais} apresenta o ARI de clusterização por método de
+redução e algoritmo para cada \textit{dataset}, ordenados por dimensionalidade
+($d = 4$ a $d = 90$). O melhor nível de redução foi selecionado por combinação.
 
+\clearpage
+{\pdfpageattr{/Rotate 90}%
 \begin{landscape}
+\vspace*{\fill}
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\linewidth]{figuras/lollipop_reais.pdf}
-  \caption{ARI por método de redução e algoritmo em dados reais, facetado por
-    \textit{dataset} (ordenado por dimensionalidade crescente). Melhor nível
-    de redução selecionado por combinação.}
+  \includegraphics[width=\linewidth,height=0.82\textwidth,keepaspectratio]{figuras/lollipop_reais.pdf}
+  \caption{ARI de clusterização por método de redução e algoritmo para cada
+    \textit{dataset} ($d = 4$ a $d = 90$). Melhor nível de redução selecionado
+    por combinação.}
   \label{fig:heatmap_reais}
 \end{figure}
-\end{landscape}
+\vspace*{\fill}
+\end{landscape}}
 
 Os resultados confirmam as tendências observadas nos dados sintéticos. Os
 maiores ganhos com redução de dimensionalidade ocorrem nos \textit{datasets}
@@ -637,94 +666,92 @@ dimensão intrínseca é baixa.
 \label{chap:conclusoes}
 % ============================================================================
 
-Os experimentos realizados nesse trabalho nos permitem formular conclusões
-precisas sobre quando e como a redução de dimensionalidade beneficia a
+Os experimentos realizados neste trabalho nos permitem formular algumas
+conclusões sobre quando e onde a redução de dimensionalidade beneficia a
 clusterização.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{UMAP é o método dominante para dados manifold}
+\section*{UMAP é o método dominante para dados manifold}
 % ─────────────────────────────────────────────────────────────────────────────
 
 O UMAP é o único método de redução que produz ganhos expressivos e
 consistentes de ARI frente ao \textit{baseline} sem redução. Para o AHC,
-a taxa de vitória do UMAP atinge \textbf{97\%} (com $\Delta$ARI médio de
+a taxa de vitória do UMAP atinge 97\% (com $\Delta$ARI médio de
 $+0{,}41$); para o K-Means, chega a 51\% ($\Delta$ARI $\approx +0{,}32$).
-Para o GMM, a taxa de vitória é de \textbf{100\%} com $\Delta$ARI médio
+Para o GMM, a taxa de vitória é de 100\% com $\Delta$ARI médio
 de $+0{,}88$ --- efeito explicado pelo colapso total do GMM sem redução
-(ARI $\approx 0$, discutido na Seção~\ref{sec:gmm}).
+(ARI $\approx 0$, discutido a seguir).
 
-Esse domínio é explicado pela natureza dos \textit{datasets} sintéticos: os
+Esse desempenho é explicado pela natureza dos \textit{datasets} sintéticos: os
 conjuntos Circles e Moons possuem estrutura de variedade não-linear
 (\textit{manifold}), que apresenta dificuldades para métodos baseados em
-projeções lineares. O efeito é mais evidente no Circles: sem redução, o ARI
+projeções lineares \citep{tenenbaum2000,mcinnes2018}. O efeito é mais evidente no Circles: sem redução, o ARI
 médio do AHC é 0{,}007 (praticamente aleatório), pois a estrutura esférica,
-com $d = 50$, é inteiramente destruída pela projeção gaussiana aleatória.
-Com UMAP, o ARI salta para 0{,}952. No Moons, o ganho é de 0{,}486 para
-0{,}990. Nenhum outro método se aproxima dessas magnitudes.
+com $d = 50$, é inteiramente ofuscada pela projeção gaussiana aleatória.
+Com a redução do UMAP, o ARI salta para 0{,}952. No Moons, o ganho é de
+0{,}486 para 0{,}990. Nenhum outro método produz ganhos dessa magnitude.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{A redução prejudica dados gaussianos}
+\section*{A redução prejudica dados gaussianos}
 % ─────────────────────────────────────────────────────────────────────────────
 
 Para os \textit{datasets} Gaussiano-3k e Gaussiano-5k, a separabilidade
-linear em 50 dimensões já é suficientemente alta para o K-Means (ARI médio
-$\approx 0{,}94$ e $0{,}91$ sem redução). Nesses casos, o UMAP
-\textit{prejudica} o K-Means (de $0{,}942$ para $0{,}877$ no
-Gaussiano-3k; de $0{,}909$ para $0{,}812$ no Gaussiano-5k). O AHC, por
-outro lado, parte de ARI menor ($0{,}75$ no Gaussiano-3k) e ainda ganha com
-UMAP ($+0{,}09$). O Isomap é o método com menor ARI médio nesse cenário
-($0{,}51$ para o AHC no Gaussiano-3k).
-
-Isso confirma a hipótese teórica com uma nuance importante: a redução
-beneficia ou prejudica \textit{dependendo do algoritmo}. Para o K-Means,
-que já explora a separabilidade linear em 50D, e da estrutura diagonal dos
-dados, a redução pode descartar dimensões informativas. Para o AHC, menos
-sensível à escala global das distâncias, mesmo uma leve compressão ainda
-traz ganho.
+linear em $d = 50$ dimensões já é suficientemente alta para o K-Means (ARI médio
+$\approx 0{,}94$ e $0{,}91$ no \textit{baseline}). Nesses casos, o UMAP
+\textit{prejudica} o K-Means (ARI de $0{,}942$ para $0{,}877$ no
+Gaussiano-3k e de $0{,}909$ para $0{,}812$ no Gaussiano-5k). O AHC, por
+outro lado, parte de um ARI médio menor ($0{,}75$ no Gaussiano-3k) e ainda
+ganha com UMAP ($+0{,}09$). O Isomap é o método com menor ARI médio nesse
+cenário ($0{,}51$ para o AHC no Gaussiano-3k). Novamente, segue que a redução
+de dimensionalidade beneficia ou prejudica dependendo do algoritmo. Para o
+K-Means, que já explora a separabilidade linear em $d = 50$ e a estrutura
+original dos dados, a redução pode descartar dimensões informativas. Para o
+AHC, menos sensível à escala global das distâncias, mesmo uma leve compressão
+ainda traz ganho \citep{ding2004,murtagh2014}.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{PCA e MDS produzem resultados equivalentes}
+\section*{PCA e MDS produzem resultados equivalentes}
 % ─────────────────────────────────────────────────────────────────────────────
 
 PCA e MDS apresentam ARI médio idêntico ($0{,}523$) em todos os
 \textit{datasets} e algoritmos. Isso é esperado: em dados euclidianos
 normalizados, o MDS por coordenadas clássicas é algebricamente equivalente
-ao PCA. A diferença prática é o custo: PCA leva em média $5$\,ms por
+ao PCA \citep{gower1966}. A diferença prática é o custo: PCA leva em média $5$\,ms por
 chamada, enquanto MDS consome $102$\,ms --- razão de aproximadamente 20:1.
 Para dados euclidianos, o PCA é empiricamente preferível sem perda de
 qualidade.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{OPTICS é especialmente afetado pela maldição da dimensionalidade}
+\section*{OPTICS é especialmente afetado pela maldição da dimensionalidade}
 % ─────────────────────────────────────────────────────────────────────────────
 
 O OPTICS não pôde ser avaliado no \textit{baseline} sem redução ($d = 50$):
 a concentração de distâncias em alta dimensão destrói os gradientes de
-densidade necessários para extrair clusters coerentes. Após redução de
+densidade necessários para extrair clusters coerentes \citep{beyer1999,kriegel2009}. Após redução de
 dimensionalidade, o OPTICS funciona bem, e as melhores configurações são PCA
 e MDS com nível $k-1$ (ARI médio $0{,}669$). O UMAP não obtém bons
 resultados aparentemente para o OPTICS: a distorção topológica local do
 algoritmo interfere com as vizinhanças de densidade que o OPTICS explora.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{O GMM colapsa em alta dimensão e se recupera com UMAP}
+\section*{O GMM colapsa em alta dimensão e se recupera com UMAP}
 \label{sec:gmm}
 % ─────────────────────────────────────────────────────────────────────────────
 
 O GMM é o algoritmo de clusterização mais sensível à dimensionalidade entre
-os quatro avaliados. Sem redução de dimensionalidade, o ARI médio do GMM é
-\textbf{0{,}000} em todos os \textit{datasets} sintéticos em 50D --- o pior
-resultado de todo o experimento. O algoritmo EM, ao estimar matrizes de
+os quatro avaliados \citep{bouveyron2007}. Sem redução de dimensionalidade, o ARI médio do GMM é
+igual a 0{,}000 em todos os \textit{datasets} sintéticos para $d = 50$ --- o
+pior resultado de todo o experimento. O algoritmo EM, ao estimar matrizes de
 covariância em 50 dimensões a partir de 240--400 observações, enfrenta um
 condicionamento numérico adverso, fazendo com que as atribuições de cluster
 sejam essencialmente aleatórias.
 
-Com UMAP, o GMM atinge ARI médio de \textbf{0{,}876} --- taxa de vitória de
+Com UMAP, o GMM atinge ARI médio de 0{,}876 --- taxa de vitória de
 100\% sobre o \textit{baseline} e resultado comparável ao K-Means + UMAP
 ($0{,}906$). O KPCA também recupera o GMM de forma expressiva (ARI
 $= 0{,}590$), sugerindo que a projeção de Kernel no espaço das
 \textit{features} captura estrutura de dependência suficiente para que as
-gaussianas do modelo sejam identificáveis.
+densidades gaussianas do modelo sejam identificáveis.
 
 Porém, o custo desse desempenho é alto: o GMM acumula 226\,846\,s de tempo
 de execução --- 76\% do custo computacional total do experimento --- com
@@ -733,51 +760,52 @@ lenta do EM. A combinação UMAP + GMM oferece qualidade próxima ao
 UMAP + K-Means, porém a um custo de clusterização cerca de 356 vezes maior.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{O nível de compressão mais agressivo é o mais eficaz}
+\section*{O nível de compressão mais agressivo é o mais eficaz}
 % ─────────────────────────────────────────────────────────────────────────────
 
 O nível $k-1$ é o mais agressivo das três opções de redução de
 dimensionalidade: para os \textit{datasets} com $k=2$ (Moons, Circles),
-reduz de 50D para \textbf{1D}; para $k=3$ (Gaussiano-3k), reduz a 2D; para
-$k=5$ (Gaussiano-5k), para 4D. Ainda assim, supera consistentemente os
-níveis 25\% ($d = 12$) e 50\% ($d = 25$) --- ARI médio:
-$0{,}626$ vs.\ $0{,}616$ e $0{,}539$, respectivamente.
+reduz de $d=50$ para $d=1$; para $k=3$ (Gaussiano-3k), reduz para $d=2$; para
+$k=5$ (Gaussiano-5k), reduz para $d=4$. Ainda assim, esse nível supera
+consistentemente os níveis 25\% ($d = 12$) e 50\% ($d = 25$): os três níveis
+apresentaram ARI médio de $0{,}626$, $0{,}616$ e $0{,}539$, respectivamente.
 
 Esse resultado, aparentemente paradoxal, tem justificativa teórica direta:
 \citet{ding2004} demonstraram que a solução ótima do K-Means no espaço
 completo é equivalente à solução ótima no subespaço de $k-1$ componentes
 principais. Além disso, os \textit{datasets} sintéticos têm dimensão
-intrínseca exatamente $k-1$: Moons e Circles são variedades 1D projetadas em
-50D; os Gaussianos são separáveis em $k-1$ hiperplanos. As dimensões além
-de $k-1$ são ruído gaussiano puro introduzido pela projeção aleatória.
-Portanto, comprimir até $k-1$ \textit{elimina} o ruído sem perder sinal,
-enquanto os níveis 25\% e 50\% retêm parte desse ruído.
+intrínseca exatamente $k-1$: Moons e Circles são variedades com $d=1$
+projetadas em $d=50$; os Gaussianos são separáveis em $k-1$ hiperplanos. As
+dimensões além de $k-1$ são ruído gaussiano puro introduzido pela projeção
+aleatória. Portanto, comprimir até $k-1$ \textit{elimina} o ruído sem perder
+sinal, enquanto os níveis 25\% e 50\% retêm parte desse ruído.
 
-Vale lembrar que este resultado pode ser dependente da forma como
+Vale lembrar, porém, que este resultado pode ser dependente da maneira como
 introduzimos o ruído aleatório via projeção gaussiana.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Custo computacional e fronteira de eficiência}
+\section*{Custo computacional e fronteira de eficiência}
 % ─────────────────────────────────────────────────────────────────────────────
 
-O UMAP domina o custo de redução: $5{.}007$\,ms por chamada em média e
-$60{.}084$\,s acumulados no experimento, contra $5$\,ms e $65{,}4$\,s do
-PCA --- razão de 1001:1. O Isomap é o segundo mais caro ($413$\,ms) e
-apresenta ARI médio de $0{,}53$ para o K-Means, abaixo do desempenho do
-UMAP, configurando baixo retorno em custo-benefício.
+O UMAP domina o custo computacional de redução de dimensionalidade:
+$5{.}007$\,ms por chamada em média e $60{.}084$\,s acumulados no experimento,
+contra $5$\,ms e $65{,}4$\,s do PCA --- razão de 1001:1. O Isomap é o segundo
+mais caro ($413$\,ms) e apresenta ARI médio de $0{,}53$ para o K-Means,
+abaixo do desempenho do UMAP, o que não é bom em termos de custo-benefício.
 
-A fronteira de eficiência mais competitiva é ocupada pelo par
-\textbf{PCA/KPCA + AHC}: ARI médio competitivo ($\approx 0{,}52$)
-com custo de DR inferior a $160$\,ms por chamada. O UMAP + K-Means oferece
-a melhor qualidade absoluta ($0{,}906$), mas a custo de DR mais de 1000
+A fronteira de eficiência mais competitiva consiste no par PCA/KPCA + AHC:
+ARI médio competitivo ($\approx 0{,}52$) com custo de redução de
+dimensionalidade inferior a $160$\,ms por chamada. O UMAP + K-Means oferece
+a melhor qualidade absoluta ($0{,}906$), mas a custo de redução mais de 1000
 vezes maior que PCA + K-Means.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Validação com dados reais}
+\section*{Validação com dados reais}
 % ─────────────────────────────────────────────────────────────────────────────
 
-Os experimentos com dados reais confirmam as conclusões dos dados sintéticos.
-Os maiores ganhos de DR ocorrem em \textit{datasets} de alta dimensão:
+Os experimentos com dados reais corroboram as conclusões dos dados sintéticos.
+Os maiores ganhos de redução de dimensionalidade ocorrem em \textit{datasets}
+de alta dimensão:
 \begin{enumerate}
   \item \textbf{WDBC} ($d=30$, $k=2$): UMAP + AHC eleva o ARI de $0{,}575$
         para $0{,}773$ ($\Delta$ARI $= +0{,}198$); OPTICS + KPCA alcança
@@ -790,42 +818,14 @@ Os maiores ganhos de DR ocorrem em \textit{datasets} de alta dimensão:
 Nos \textit{datasets} de baixa dimensão (Iris com $d=4$, Blood Transfusion
 com $d=4$, Yeast com $d=8$), os ganhos são modestos (máximo $\Delta < 0{,}06$,
 exceto Iris com Isomap + OPTICS, $\Delta = 0{,}250$). Desta forma, nos dados
-reais, a DR também se mostra mais valiosa quando a dimensão dos dados
-observados é alta.
-
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Síntese}
-% ─────────────────────────────────────────────────────────────────────────────
-
-\begin{enumerate}
-  \item \textbf{A redução de dimensionalidade não beneficia universalmente a
-        clusterização}: o ganho depende criticamente da estrutura intrínseca
-        dos dados e do algoritmo de clusterização escolhido.
-  \item \textbf{UMAP é indispensável para variedades não-lineares}: é o único
-        método capaz de recuperar estruturas curvilíneas destruídas pela
-        maldição da dimensionalidade, com taxa de vitória de 97\% para o AHC
-        ($\Delta\text{ARI} \approx +0{,}41$).
-  \item \textbf{PCA domina em eficiência para dados lineares}: idêntico ao MDS
-        em qualidade ($0{,}523$), aproximadamente 20 vezes mais rápido.
-  \item \textbf{O nível de redução $k-1$ é o mais eficaz, apesar de ser o
-        mais agressivo}: reduzir até a dimensão intrínseca ($k-1$) elimina
-        ruído puro sem perder sinal discriminativo --- ao contrário dos
-        níveis 25\% e 50\%, que retêm dimensões espúrias.
-  \item \textbf{O GMM colapsa completamente sem redução em alta dimensão}
-        (ARI $\approx 0$), mas se recupera com UMAP (ARI $= 0{,}876$). Seu
-        custo é proibitivo: 76\% do tempo total do experimento.
-  \item \textbf{O par recomendado para cenários de alta dimensão com estrutura
-        desconhecida é UMAP + K-Means}: melhor ARI médio absoluto ($0{,}906$),
-        ao custo de DR muito maior que PCA. Para cenários onde o custo
-        importa, PCA + AHC oferece desempenho competitivo ($\approx 0{,}52$)
-        com custo de DR mínimo.
-\end{enumerate}
+reais, a redução de dimensionalidade também se mostra mais eficaz quando a
+dimensão dos dados observados é alta.
 
 % ============================================================================
 % REFERÊNCIAS
 % ============================================================================
 \bibliographystyle{plainnat}
-\begin{thebibliography}{9}
+\begin{thebibliography}{99}
 
 \bibitem[Amate et al.(2026)]{amate2026}
 Amate, Bakhtyari, Roy \& Makarenkov (2026).
@@ -833,11 +833,28 @@ Amate, Bakhtyari, Roy \& Makarenkov (2026).
 performance --- a systematic study}.
 arXiv:2604.22099.
 
+\bibitem[Ankerst et al.(1999)]{ankerst1999}
+Ankerst, Breunig, Kriegel \& Sander (1999).
+OPTICS: Ordering points to identify the clustering structure.
+\textit{Proceedings of the ACM SIGMOD International Conference on Management
+of Data}, 49--60.
+
 \bibitem[Beyer et al.(1999)]{beyer1999}
 Beyer, Goldstein, Ramakrishnan \& Shaft (1999).
 When is ``nearest neighbor'' meaningful?
 \textit{Proceedings of the 7th International Conference on Database
 Theory (ICDT)}, LNCS 1540, 217--235.
+
+\bibitem[Bouveyron et al.(2007)]{bouveyron2007}
+Bouveyron, Girard \& Schmid (2007).
+High-dimensional data clustering.
+\textit{Computational Statistics \& Data Analysis}, 52(1), 502--519.
+
+\bibitem[Dempster et al.(1977)]{dempster1977}
+Dempster, Laird \& Rubin (1977).
+Maximum likelihood from incomplete data via the EM algorithm.
+\textit{Journal of the Royal Statistical Society: Series B (Methodological)},
+39(1), 1--22.
 
 \bibitem[Ding \& He(2004)]{ding2004}
 Ding \& He (2004).
@@ -845,10 +862,28 @@ K-means clustering via principal component analysis.
 \textit{Proceedings of the 21st International Conference on Machine
 Learning (ICML)}, 225--232.
 
+\bibitem[Gower(1966)]{gower1966}
+Gower (1966).
+Some distance properties of latent root and vector methods used in
+multivariate analysis.
+\textit{Biometrika}, 53(3--4), 325--338.
+
 \bibitem[Hubert \& Arabie(1985)]{hubert1985}
 Hubert \& Arabie (1985).
 Comparing partitions.
 \textit{Journal of Classification}, 2(1), 193--218.
+
+\bibitem[Kriegel et al.(2009)]{kriegel2009}
+Kriegel, Kröger \& Zimek (2009).
+Clustering high-dimensional data: A survey on subspace clustering,
+pattern-based clustering, and correlation clustering.
+\textit{ACM Transactions on Knowledge Discovery from Data (TKDD)}, 3(1), 1--58.
+
+\bibitem[MacQueen(1967)]{macqueen1967}
+MacQueen (1967).
+Some methods for classification and analysis of multivariate observations.
+\textit{Proceedings of the 5th Berkeley Symposium on Mathematical Statistics
+and Probability}, Vol.~1, 281--297.
 
 \bibitem[McInnes \& Healy(2018)]{mcinnes2018}
 McInnes \& Healy (2018).
@@ -856,10 +891,41 @@ UMAP: Uniform Manifold Approximation and Projection for dimension
 reduction.
 \textit{arXiv:1802.03426}.
 
+\bibitem[Murtagh \& Legendre(2014)]{murtagh2014}
+Murtagh \& Legendre (2014).
+Ward's hierarchical agglomerative clustering method: Which algorithms
+implement Ward's criterion?
+\textit{Journal of Classification}, 31(3), 274--295.
+
+\bibitem[Pearson(1901)]{pearson1901}
+Pearson (1901).
+On lines and planes of closest fit to systems of points in space.
+\textit{Philosophical Magazine}, Series 6, 2(11), 559--572.
+
+\bibitem[Schölkopf et al.(1998)]{scholkopf1998}
+Schölkopf, Smola \& Müller (1998).
+Nonlinear component analysis as a kernel eigenvalue problem.
+\textit{Neural Computation}, 10(5), 1299--1319.
+
+\bibitem[Tenenbaum et al.(2000)]{tenenbaum2000}
+Tenenbaum, de Silva \& Langford (2000).
+A global geometric framework for nonlinear dimensionality reduction.
+\textit{Science}, 290(5500), 2319--2323.
+
+\bibitem[Torgerson(1952)]{torgerson1952}
+Torgerson (1952).
+Multidimensional scaling: I. Theory and method.
+\textit{Psychometrika}, 17(4), 401--419.
+
 \bibitem[UCI(2019)]{uci2019}
 Dua \& Graff (2019).
 \textit{UCI Machine Learning Repository}.
 University of California, Irvine.
+
+\bibitem[Ward(1963)]{ward1963}
+Ward (1963).
+Hierarchical grouping to optimize an objective function.
+\textit{Journal of the American Statistical Association}, 58(301), 236--244.
 
 \end{thebibliography}
 
